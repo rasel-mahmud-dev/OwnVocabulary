@@ -40,7 +40,6 @@ data class ModernNavItem(
 @Composable
 fun BottomNavigationBar(
     selectedItem: String,
-    containerColor: Color = MaterialTheme.colorScheme.surface,
     tonalElevation: Dp = 12.dp,
     setSelectedItem: (index: String) -> Unit,
 ) {
@@ -49,7 +48,7 @@ fun BottomNavigationBar(
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 
     NavigationBar(
-        containerColor = containerColor,
+        containerColor = MaterialTheme.colorScheme.background,
         tonalElevation = tonalElevation,
         modifier = Modifier
             .fillMaxWidth()
@@ -137,7 +136,7 @@ fun BottomNavigationBar(
                     selectedTextColor = Color.Transparent,
                     unselectedIconColor = Color.Transparent,
                     unselectedTextColor = Color.Transparent,
-                    indicatorColor = primaryColor.copy(alpha = 0.12f)
+                    indicatorColor = Color.Transparent
                 ),
                 modifier = Modifier.clip(RoundedCornerShape(16.dp))
             )

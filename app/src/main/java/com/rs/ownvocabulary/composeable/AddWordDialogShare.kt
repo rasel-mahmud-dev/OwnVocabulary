@@ -36,6 +36,7 @@ import com.rs.ownvocabulary.database.Word
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddWordDialogShare(
+    editItem: Word? = null,
     incomingWord: String?,
     showDialog: Boolean,
     onDismiss: () -> Unit,
@@ -69,6 +70,18 @@ fun AddWordDialogShare(
         label = "favoriteScale"
     )
 
+    LaunchedEffect(editItem) {
+        if(editItem != null){
+            word = editItem.word
+            shortMeaning = editItem.shortMeaning
+            details = editItem.details
+            examples = editItem.examples
+            isFavorite = editItem.isFavorite
+        }
+    }
+
+    val isUpdate = editItem != null
+
     AlertDialog(
         modifier = Modifier
             .heightIn(min = 200.dp, max = 500.dp)
@@ -89,7 +102,7 @@ fun AddWordDialogShare(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    "Add New Word",
+                    "${if(isUpdate) "Update " else "Add New "} Word",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -307,7 +320,7 @@ fun AddWordDialogShare(
                         containerColor = MaterialTheme.colorScheme.primary
                     )
                 ) {
-                    Text("Add Word", fontWeight = FontWeight.SemiBold)
+                    Text("Submit", fontWeight = FontWeight.SemiBold)
                 }
             }
         }

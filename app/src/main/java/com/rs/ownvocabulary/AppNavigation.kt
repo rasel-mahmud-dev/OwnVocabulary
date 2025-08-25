@@ -25,6 +25,7 @@ import androidx.navigation.compose.rememberNavController
 import com.rs.ownvocabulary.layouts.MainLayout
 import com.rs.ownvocabulary.screens.Main
 import com.rs.ownvocabulary.screens.QuickView
+import com.rs.ownvocabulary.screens.WordPractice
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
 
@@ -79,6 +80,7 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
         NavHost(
             navController = navController,
             startDestination = "home"
+//            startDestination = "word_detail/e15f260f-48da-4a89-ad09-60605d329e29"
 //                startDestination = startDestination // "home",
         ) {
 
@@ -100,6 +102,11 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
                 ) {
                     Main(navController)
                 }
+            }
+
+            composable("word_detail/{uid}") {
+                val uid = it.arguments?.getString("uid") ?: ""
+                WordPractice(navController, uid, appViewModel)
             }
 
             composable("analytics") {

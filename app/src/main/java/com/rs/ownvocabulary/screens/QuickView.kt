@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.GridView
@@ -27,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rs.ownvocabulary.ShareActivity
 import com.rs.ownvocabulary.composeable.AddWordDialog
@@ -56,7 +58,7 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
         showDialog = showDialog,
         onDismiss = { showDialog = false },
         onAddWord = { newWord ->
-            appViewModel.addWord(newWord){
+            appViewModel.addWord(newWord) {
                 showDialog = false
             }
         }
@@ -75,6 +77,8 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
     Box() {
 
         FloatingActionButton(
+            containerColor = MaterialTheme.colorScheme.primaryContainer,
+            contentColor = MaterialTheme.colorScheme.onPrimaryContainer,
             onClick = {
 //                openShareModal()
                 showDialog = true
@@ -83,12 +87,14 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                 .align(Alignment.BottomEnd)
                 .padding(16.dp)
                 .size(56.dp)
+                .zIndex(1F)
+
         ) {
             Icon(
                 imageVector = Icons.Default.Add,
                 contentDescription = "Add Word",
-                tint = Color.White,
-                modifier = Modifier.size(32.dp)
+                tint = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.size(24.dp)
             )
         }
 
@@ -96,6 +102,7 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
                 .padding(horizontal = 16.dp)
         ) {
             Spacer(modifier = Modifier.height(16.dp))
@@ -108,15 +115,15 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                 Column {
                     Text(
                         text = "Quick View",
-                        fontSize = 32.sp,
-                        fontWeight = FontWeight.Bold,
-                        color = Color(0xFF1A1A2E)
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        fontWeight = FontWeight.Bold
+
                     )
                     Text(
                         text = "${words.size} words • Fast browse mode",
-                        fontSize = 14.sp,
-                        color = Color.Gray,
-                        fontWeight = FontWeight.Medium
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
 
@@ -128,8 +135,11 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                     elevation = CardDefaults.cardElevation(defaultElevation = 4.dp),
                     shape = RoundedCornerShape(12.dp),
                     colors = CardDefaults.cardColors(
-                        containerColor = if (isGridView) Color(0xFF6B73FF) else Color.White
-                    )
+                        containerColor = if (isGridView)
+                            MaterialTheme.colorScheme.primaryContainer
+                        else
+                            MaterialTheme.colorScheme.primaryContainer
+                    ),
                 ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -137,16 +147,16 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                         horizontalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Icon(
-                            imageVector = if (isGridView) Icons.Default.GridView else Icons.Default.ViewList,
+                            imageVector = if (isGridView) Icons.Default.GridView else Icons.AutoMirrored.Filled.ViewList,
                             contentDescription = "Toggle View",
-                            tint = if (isGridView) Color.White else Color(0xFF6B73FF),
+                            tint = MaterialTheme.colorScheme.onSurface,
                             modifier = Modifier.size(20.dp)
                         )
                         Text(
                             text = if (isGridView) "Grid" else "List",
                             fontSize = 14.sp,
                             fontWeight = FontWeight.SemiBold,
-                            color = if (isGridView) Color.White else Color(0xFF6B73FF)
+                            color = MaterialTheme.colorScheme.onSurface
                         )
                     }
                 }
@@ -165,7 +175,9 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             words.forEach { word ->
-                                QuickWordCard(word = word)
+                                QuickWordCard(word = word, onItemClick = {
+                                    navHostController.navigate("word_detail/${word.uid}")
+                                })
                             }
                         }
                     } else {
@@ -185,7 +197,7 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
 }
 
 @Composable
-fun QuickWordCard(word: Word) {
+fun QuickWordCard(word: Word, onItemClick: () -> Unit) {
     var isFavorite by remember { mutableStateOf(word.isFavorite) }
 
     val cardColors = when (word.proficiencyLevel) {
@@ -199,7 +211,7 @@ fun QuickWordCard(word: Word) {
         modifier = Modifier
             .wrapContentWidth()
             .clip(RoundedCornerShape(12.dp))
-            .background(Color.White)
+            .background(MaterialTheme.colorScheme.surfaceContainer)
             .drawBehind {
                 drawLine(
                     color = cardColors.first(),
@@ -208,7 +220,9 @@ fun QuickWordCard(word: Word) {
                     strokeWidth = 4.dp.toPx()
                 )
             }
-            .clickable { }
+            .clickable {
+                onItemClick()
+            }
     ) {
 
         Row(
@@ -223,7 +237,7 @@ fun QuickWordCard(word: Word) {
                 text = word.word,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Bold,
-                color = Color(0xFF1A1A2E),
+                color = MaterialTheme.colorScheme.onSurface,
                 maxLines = 1,
                 overflow = TextOverflow.Visible
             )
@@ -238,7 +252,7 @@ fun QuickWordCard(word: Word) {
                 Icon(
                     imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
                     contentDescription = "Favorite",
-                    tint = if (isFavorite) Color(0xFFE91E63) else Color.Gray.copy(alpha = 0.3f),
+                    tint = if (isFavorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant,
                     modifier = Modifier.size(12.dp)
                 )
             }
@@ -312,4 +326,14 @@ fun QuickWordListItem(word: Word) {
             }
         }
     }
+}
+
+fun getProficiencyColors(proficiencyLevel: String): List<Color>{
+    val cardColors = when (proficiencyLevel) {
+        "Beginner" -> listOf(Color(0xFF4FACFE), Color(0xFF00F2FE))
+        "Intermediate" -> listOf(Color(0xFFFB8C00), Color(0xFFFFD54F))
+        "Advanced" -> listOf(Color(0xFF667eea), Color(0xFF764ba2))
+        else -> listOf(Color(0xFF6B73FF), Color(0xFF9B59B6))
+    }
+    return cardColors
 }

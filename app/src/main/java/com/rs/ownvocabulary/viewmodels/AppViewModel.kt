@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.rs.ownvocabulary.database.SyncStatus
 import com.rs.ownvocabulary.database.Word
 import com.rs.ownvocabulary.database.WordDatabase
+import com.rs.ownvocabulary.database.WordPartial
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -45,6 +46,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun getItemByUid(uid: String, cb: (item: Word?) -> Unit) {
+        viewModelScope.launch {
+            db.getWordByUid(uid) {
+                cb(it)
+            }
+        }
+    }
+
     fun addWord(newWord: Word, cb: (errorMessage: String?) -> Unit) {
         viewModelScope.launch {
             try {
@@ -54,6 +63,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             } catch (ex: Exception) {
                 println(ex?.message)
                 cb(ex.message)
+            }
+        }
+    }
+
+    fun updatePartial(wordPartial: WordPartial, cb: (errorMessage: String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                val result = db.updatePartial(wordPartial)
+                cb(null)
+                println("update partal result $result")
+            } catch (ex: Exception) {
+                println("error: $ex")
+                cb(ex.message)
+            }
+        }
+    }
+
+    fun incrementViewCount(uid: String) {
+        viewModelScope.launch {
+            try {
+                val result = db.incrementViewCount(uid)
+                println("update partal result $result")
+            } catch (ex: Exception) {
+                println("error: $ex")
             }
         }
     }

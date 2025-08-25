@@ -29,6 +29,23 @@ data class Word(
     val lastSyncAttempt: Long? = null
 )
 
+data class WordPartial(
+    val id: Long = 0,
+    val uid: String,
+    val word: String? = null,
+    val type: String? = null,
+    val shortMeaning: String? = null,
+    val details: String? = null,
+    val examples: String? = null,
+    val isFavorite: Boolean? = null,
+    val proficiencyLevel: String? = null,
+    val viewCount: Int? = null,
+    val lastViewedDaysAgo: Int? = null,
+    val syncStatus: SyncStatus? = null,
+    val retryCount: Int? = null,
+    val lastSyncAttempt: Long? = null
+)
+
 enum class SyncStatus {
     PENDING, IN_PROGRESS, SYNCED, FAILED, DELETED
 }
@@ -210,6 +227,45 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         )
     }
 
+    suspend fun updatePartial(partialWord: WordPartial): Int = withContext(Dispatchers.IO) {
+        val db = writableDatabase
+        val values = ContentValues().apply {
+            partialWord.word?.let { put(COLUMN_WORD, it) }
+            partialWord.type?.let { put(COLUMN_TYPE, it) }
+            partialWord.shortMeaning?.let { put(COLUMN_SHORT_MEANING, it) }
+            partialWord.details?.let { put(COLUMN_DETAILS, it) }
+            partialWord.examples?.let { put(COLUMN_EXAMPLES, it) }
+            partialWord.isFavorite?.let { put(COLUMN_IS_FAVORITE, if (it) 1 else 0) }
+            partialWord.proficiencyLevel?.let { put(COLUMN_PROFICIENCY_LEVEL, it) }
+            partialWord.viewCount?.let { put(COLUMN_VIEW_COUNT, it) }
+            partialWord.lastViewedDaysAgo?.let { put(COLUMN_LAST_VIEWED_DAYS_AGO, it) }
+            partialWord.syncStatus?.let { put(COLUMN_SYNC_STATUS, it.name) }
+            partialWord.retryCount?.let { put(COLUMN_RETRY_COUNT, it) }
+            partialWord.lastSyncAttempt?.let { put(COLUMN_LAST_SYNC_ATTEMPT, it) }
+
+            // Always update these fields
+            put(COLUMN_UPDATED_AT, System.currentTimeMillis())
+        }
+
+        println("uid ${partialWord.uid}")
+
+        println(values.toString())
+        println(values.toString())
+        println(values.toString())
+
+        // Only proceed if there are values to update (excluding the always-updated fields)
+        if (values.size() > 1) { // More than just updatedAt
+            db.update(
+                TABLE_WORDS,
+                values,
+                "$COLUMN_UID = ?",
+                arrayOf(partialWord.uid)
+            )
+        } else {
+            0 // No fields to update
+        }
+    }
+
     suspend fun incrementViewCount(uid: String): Int = withContext(Dispatchers.IO) {
         val db = writableDatabase
         val values = ContentValues().apply {
@@ -217,7 +273,6 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
             put(COLUMN_UPDATED_AT, System.currentTimeMillis())
         }
 
-        // Increment view count
         db.execSQL(
             "UPDATE $TABLE_WORDS SET $COLUMN_VIEW_COUNT = $COLUMN_VIEW_COUNT + 1 WHERE $COLUMN_UID = ?",
             arrayOf(uid)

@@ -38,7 +38,6 @@ fun MainLayout(
     Scaffold(
         bottomBar = {
             BottomNavigationBar(
-                containerColor = Color.White,
                 tonalElevation = 8.dp,
                 selectedItem = selectedItem,
                 setSelectedItem = {
