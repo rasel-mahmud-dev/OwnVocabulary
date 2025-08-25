@@ -262,14 +262,14 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
                 arrayOf(partialWord.uid)
             )
         } else {
-            0 // No fields to update
+            0
         }
     }
 
     suspend fun incrementViewCount(uid: String): Int = withContext(Dispatchers.IO) {
         val db = writableDatabase
         val values = ContentValues().apply {
-            put(COLUMN_LAST_VIEWED_DAYS_AGO, 0) // Reset to 0 since just viewed
+            put(COLUMN_LAST_VIEWED_DAYS_AGO, 0)
             put(COLUMN_UPDATED_AT, System.currentTimeMillis())
         }
 
@@ -451,7 +451,6 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         }
     }
 
-    // Analytics functions
     suspend fun getWordStats(): WordStats = withContext(Dispatchers.IO) {
         val db = readableDatabase
 
