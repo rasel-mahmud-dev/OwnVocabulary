@@ -82,6 +82,7 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
                 $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 $COLUMN_UID TEXT UNIQUE NOT NULL,
                 $COLUMN_WORD TEXT NOT NULL,
+                $COLUMN_TYPE TEXT DEFAULT 'word',
                 $COLUMN_SHORT_MEANING TEXT DEFAULT '',
                 $COLUMN_DETAILS TEXT DEFAULT '',
                 $COLUMN_EXAMPLES TEXT DEFAULT '',

@@ -36,7 +36,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var activePullNoteSyncJob: Job? = null
 
-    fun loadWords(){
+    fun loadWords() {
         viewModelScope.launch {
             db.getAllWords {
                 _words.value = it
@@ -45,10 +45,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun addWord(newWord: Word){
+    fun addWord(newWord: Word, cb: (errorMessage: String?) -> Unit) {
         viewModelScope.launch {
-            db.insertWord(newWord)
-            loadWords()
+            try {
+                db.insertWord(newWord)
+                cb(null)
+                loadWords()
+            } catch (ex: Exception) {
+                println(ex?.message)
+                cb(ex.message)
+            }
         }
     }
 
@@ -56,7 +62,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         loadWords()
     }
 
-//    fun startNoteSync() {
+    //    fun startNoteSync() {
 //        activeSyncJob?.cancel()
 ////        _syncStatus.value = "Starting sync..."
 //

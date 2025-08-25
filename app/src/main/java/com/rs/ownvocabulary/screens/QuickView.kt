@@ -30,6 +30,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rs.ownvocabulary.ShareActivity
 import com.rs.ownvocabulary.composeable.AddWordDialog
+import com.rs.ownvocabulary.composeable.AddWordDialogShare
 import com.rs.ownvocabulary.database.Word
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
@@ -50,11 +51,14 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
 
     println("wordsListwordsListaa ${words}")
 
-    AddWordDialog(
+    AddWordDialogShare(
+        incomingWord = "",
         showDialog = showDialog,
         onDismiss = { showDialog = false },
         onAddWord = { newWord ->
-            appViewModel.addWord(newWord)
+            appViewModel.addWord(newWord){
+                showDialog = false
+            }
         }
     )
 
@@ -72,8 +76,8 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
 
         FloatingActionButton(
             onClick = {
-                openShareModal()
-//                showDialog = true
+//                openShareModal()
+                showDialog = true
             },
             modifier = Modifier
                 .align(Alignment.BottomEnd)
