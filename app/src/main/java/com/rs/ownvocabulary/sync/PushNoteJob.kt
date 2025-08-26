@@ -24,15 +24,17 @@ data class ApiException(
  */
 
 
-class PushNoteJob(
+class PushWordJob(
     private val getUnsyncedNotes: () -> List<Word>,
     private val updateNoteSyncStatus: (noteId: String, status: SyncStatus, retryCount: Int) -> Unit,
     private val isConnected: () -> Boolean
 ) {
     private val httpHelper = HttpHelper.getInstance()
     private val gson = Gson()
-    private val maxRetries = 100
-    @Volatile private var isStopped = false // Flag to control syncing
+    private val maxRetries = 10
+
+    @Volatile
+    private var isStopped = false // Flag to control syncing
 
     // Call this to stop syncing from outside
     fun stop() {
@@ -69,41 +71,24 @@ class PushNoteJob(
                     throw NoConnectionException()
                 }
 
-//                when {
-//                    note.id == 0 -> createNote(note)
-//                    else -> updateNote(note)
-//                }
+                createNote(note, note.id != 0L)
+
             }
         }
     }
 
-    private suspend fun createNote(note: Word) {
+    private suspend fun createNote(note: Word, isUpdate: Boolean) {
         if (!isConnected()) throw NoConnectionException()
-
-        println("create note;;; ${note.word}")
+        println("create word;;; ${note.word}")
         if (!isConnected()) throw NoConnectionException()
         val noteJson = gson.toJson(note)
-        val response = httpHelper.put("/api/v2/diary/${note.uid}", noteJson)
+        val response = httpHelper.put("/api/v2/word/${note.uid}", noteJson)
         println(response)
         if (response.statusCode in 200..299) {
             updateNoteSyncStatus(note.uid, SyncStatus.SYNCED, 1)
         } else {
-            println("Failed to create note: ${response.statusCode}")
-            throw ApiException("Failed to create note: ${response.statusCode}")
-        }
-    }
-
-    private suspend fun updateNote(note: Word) {
-        println("update note;;; ${note.word}")
-        if (!isConnected()) throw NoConnectionException()
-        val noteJson = gson.toJson(note)
-        val response = httpHelper.put("/api/v2/diary/${note.uid}", noteJson)
-        println(response)
-        if (response.statusCode in 200..299) {
-            updateNoteSyncStatus(note.uid, SyncStatus.SYNCED, 1)
-        } else {
-            println("Failed to update note: ${response.statusCode}")
-            throw ApiException("Failed to update note: ${response.statusCode}")
+            println("Failed to create word: ${response.statusCode} is Update -> ${isUpdate}")
+            throw ApiException("Failed to create word: ${response.statusCode}")
         }
     }
 
@@ -118,9 +103,10 @@ class PushNoteJob(
                 throw e
             } catch (e: Exception) {
                 retryCount++
-                println("retryCount $retryCount")
                 if (retryCount >= max) throw e
-                delay((2000 * retryCount).toLong())
+                val delayedTime = 2000L * retryCount
+                println("retryCount $retryCount delayedTime $delayedTime")
+                delay(delayedTime)
             }
         }
     }

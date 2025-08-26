@@ -248,9 +248,6 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         }
 
         println("uid ${partialWord.uid}")
-
-        println(values.toString())
-        println(values.toString())
         println(values.toString())
 
         // Only proceed if there are values to update (excluding the always-updated fields)

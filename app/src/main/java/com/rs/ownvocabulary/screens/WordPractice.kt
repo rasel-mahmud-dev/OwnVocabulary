@@ -27,6 +27,7 @@ import androidx.navigation.NavHostController
 import com.rs.ownvocabulary.composeable.AddAnExample
 import com.rs.ownvocabulary.composeable.AddWordDialogShare
 import com.rs.ownvocabulary.composeable.TopBar
+import com.rs.ownvocabulary.database.SyncStatus
 import com.rs.ownvocabulary.database.Word
 import com.rs.ownvocabulary.database.WordPartial
 import com.rs.ownvocabulary.viewmodels.AppViewModel
@@ -48,7 +49,7 @@ fun WordPractice(navHostController: NavHostController, uid: String, appViewModel
             isFavorite = word?.isFavorite ?: false
             isLoading = false
             word?.let {
-                    appViewModel.incrementViewCount(it.uid)
+                appViewModel.incrementViewCount(it.uid)
             }
         }
     }
@@ -120,7 +121,7 @@ fun WordPractice(navHostController: NavHostController, uid: String, appViewModel
                         examples = newWord.examples,
                         isFavorite = newWord.isFavorite,
                         proficiencyLevel = newWord.proficiencyLevel,
-                        syncStatus = newWord.syncStatus,
+                        syncStatus = SyncStatus.PENDING,
                     )
                 ) {
                     loadDetail(uid)
@@ -551,6 +552,7 @@ private fun ExpandableSection(
                 appViewModel.updatePartial(
                     WordPartial(
                         uid = uid,
+                        syncStatus = SyncStatus.PENDING,
                         examples = examples + "\n" + it
                     )
                 ) {

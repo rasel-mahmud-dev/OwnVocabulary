@@ -1,5 +1,6 @@
 package com.rs.ownvocabulary.viewmodels
 
+import android.annotation.SuppressLint
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -7,6 +8,7 @@ import com.rs.ownvocabulary.database.SyncStatus
 import com.rs.ownvocabulary.database.Word
 import com.rs.ownvocabulary.database.WordDatabase
 import com.rs.ownvocabulary.database.WordPartial
+import com.rs.ownvocabulary.sync.PullWordJob
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -14,6 +16,14 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
+import android.os.Build
+import androidx.lifecycle.application
+import androidx.lifecycle.viewmodel.compose.viewModel
+import com.rs.notenet.sync.PushWordJob
+import kotlinx.coroutines.delay
 
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
@@ -60,6 +70,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 db.insertWord(newWord)
                 cb(null)
                 loadWords()
+                startWordSync()
             } catch (ex: Exception) {
                 println(ex?.message)
                 cb(ex.message)
@@ -72,6 +83,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val result = db.updatePartial(wordPartial)
                 cb(null)
+                delay(10000L)
+                startWordSync()
                 println("update partal result $result")
             } catch (ex: Exception) {
                 println("error: $ex")
@@ -92,43 +105,46 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+
+        println("has nwet ${isNetworkAvailable(application)}")
+
         loadWords()
     }
 
-    //    fun startNoteSync() {
-//        activeSyncJob?.cancel()
-////        _syncStatus.value = "Starting sync..."
-//
-//        activeSyncJob = viewModelScope.launch {
-//            try {
-//                val unsyncedNotes = noteDb.getUnsyncedNotes()
-//                if (unsyncedNotes.isEmpty()) {
-//                    println("no need to sync")
-////                    _syncStatus.value = "Everything is synced"
-//                    return@launch
-//                }
-//
-//                println("Total ${unsyncedNotes.size} notes to sync")
-//
-////                _syncStatus.value = "Syncing ${unsyncedNotes.size} notes..."
-//
-//                val pushJob = PushNoteJob(
-//                    isConnected = { isNetworkAvailable() },
-//                    getUnsyncedNotes = { unsyncedNotes },
-//                    updateNoteSyncStatus = { id, status, retryCount ->
-//                        noteDb.updateNoteSyncStatus(id, status, retryCount)
-//                    }
-//                )
-//
-//                pushJob.startPushing()
-////                _syncStatus.value = "Sync completed successfully"
-//
-//            } catch (e: Exception) {
-////                _syncStatus.value = "Sync failed: ${e.message}"
-//            }
-//        }
-//    }
-//
+    fun startWordSync() {
+        activeSyncJob?.cancel()
+        activeSyncJob = viewModelScope.launch {
+            try {
+                val unsyncedNotes = db.getUnsyncedWords()
+                println("Total ${unsyncedNotes.size} notes to sync")
+
+                if (unsyncedNotes.isEmpty()) {
+                    println("no need to sync")
+//                    _syncStatus.value = "Everything is synced"
+                    return@launch
+                }
+
+//                _syncStatus.value = "Syncing ${unsyncedNotes.size} notes..."
+
+                val pushJob = PushWordJob(
+                    isConnected = { isNetworkAvailable(application) },
+                    getUnsyncedNotes = { unsyncedNotes },
+                    updateNoteSyncStatus = { id, status, retryCount ->
+                        println("sdf sdf $id, status $status, $retryCount")
+                        db.updateWordSyncStatus(id, status, retryCount)
+                    }
+                )
+
+                pushJob.startPushing()
+//                _syncStatus.value = "Sync completed successfully"
+
+            } catch (e: Exception) {
+//                _syncStatus.value = "Sync failed: ${e.message}"
+            }
+        }
+    }
+
+    //
 //
 //    fun pullNoteFromServer() {
 //        activePullSyncJob?.cancel()
@@ -172,13 +188,22 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 //        }
     }
 
-//    private fun isNetworkAvailable(): Boolean {
-//        return true
-//        val connectivityManager = getApplication<Application>()
-//            .getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
-//        val networkInfo = connectivityManager.activeNetworkInfo
-//        return networkInfo?.isConnectedOrConnecting == true
-//    }
+    private fun isNetworkAvailable(context: Context): Boolean {
+        val connectivityManager =
+            context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        return capabilities != null && (
+                capabilities.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) ||
+                        capabilities.hasTransport(NetworkCapabilities.TRANSPORT_VPN)
+                )
+
+
+    }
+
 
     fun cancelSync() {
         activeSyncJob?.cancel()

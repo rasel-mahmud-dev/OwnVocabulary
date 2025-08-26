@@ -14,7 +14,7 @@ data class PullNoteJobResponse(
     val hasMore: Boolean,
 )
 
-class PullNotesJob(
+class PullWordJob(
     private val saveNotes: (List<Word>) -> Unit,
     private val isConnected: () -> Boolean,
     private val onSyncComplete: () -> Unit = {}

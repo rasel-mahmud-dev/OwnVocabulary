@@ -1,6 +1,7 @@
 package com.rs.ownvocabulary.screens
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
@@ -33,7 +34,9 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rs.ownvocabulary.ShareActivity
 import com.rs.ownvocabulary.composeable.AddWordDialog
 import com.rs.ownvocabulary.composeable.AddWordDialogShare
+import com.rs.ownvocabulary.database.SyncStatus
 import com.rs.ownvocabulary.database.Word
+import com.rs.ownvocabulary.database.WordPartial
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
 
@@ -50,7 +53,6 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
     val coroutineScope = rememberCoroutineScope()
     val words by appViewModel.words.collectAsStateWithLifecycle()
 
-
     println("wordsListwordsListaa ${words}")
 
     AddWordDialogShare(
@@ -60,9 +62,27 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
         onAddWord = { newWord ->
             appViewModel.addWord(newWord) {
                 showDialog = false
+
             }
         }
     )
+
+    fun toggleLove(word: Word){
+        appViewModel.updatePartial(
+            WordPartial(
+                uid = word.uid,
+                syncStatus = SyncStatus.PENDING,
+                isFavorite = !word.isFavorite
+            )
+        ) {
+            if (it != null) {
+                Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
+                return@updatePartial
+            }
+            appViewModel.loadWords()
+            Toast.makeText(context, "Updated", Toast.LENGTH_SHORT).show()
+        }
+    }
 
 
     fun openShareModal() {
@@ -175,7 +195,9 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                             verticalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             words.forEach { word ->
-                                QuickWordCard(word = word, onItemClick = {
+                                QuickWordCard(word = word,
+                                    onToggleLove={toggleLove(word)},
+                                    onItemClick = {
                                     navHostController.navigate("word_detail/${word.uid}")
                                 })
                             }
@@ -197,8 +219,8 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
 }
 
 @Composable
-fun QuickWordCard(word: Word, onItemClick: () -> Unit) {
-    var isFavorite by remember { mutableStateOf(word.isFavorite) }
+fun QuickWordCard(word: Word, onItemClick: () -> Unit, onToggleLove: ()-> Unit) {
+    var isFavorite by remember(word.isFavorite) { mutableStateOf(word.isFavorite) }
 
     val cardColors = when (word.proficiencyLevel) {
         "Beginner" -> listOf(Color(0xFF4FACFE), Color(0xFF00F2FE))
@@ -246,7 +268,7 @@ fun QuickWordCard(word: Word, onItemClick: () -> Unit) {
                 modifier = Modifier
                     .size(20.dp)
                     .clip(RoundedCornerShape(50.dp))
-                    .clickable { isFavorite = !isFavorite },
+                    .clickable { onToggleLove() },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
