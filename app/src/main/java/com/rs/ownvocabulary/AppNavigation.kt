@@ -22,9 +22,10 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.rs.ownvocabulary.layouts.LayoutWithCreateWord
 import com.rs.ownvocabulary.layouts.MainLayout
-import com.rs.ownvocabulary.screens.Main
 import com.rs.ownvocabulary.screens.QuickView
+import com.rs.ownvocabulary.screens.Vocabulary
 import com.rs.ownvocabulary.screens.WordPractice
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
@@ -64,7 +65,6 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
 //        checkAndRequestPermissions(activity)
 //    }
 
-
     val startDestination = remember(initialIntent) {
         when {
             initialIntent?.hasExtra("route") == true &&
@@ -79,28 +79,33 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = "home"
+            startDestination = "dictionary"
 //            startDestination = "word_detail/e15f260f-48da-4a89-ad09-60605d329e29"
 //                startDestination = startDestination // "home",
         ) {
 
             composable("home") {
-                MainLayout(
-                    navController = navController,
-                    selectedItem=selectedItem,
-                    setSelectedItem = {selectedItem = it}
-                ) {
-                    QuickView(navController, appViewModel)
+
+                LayoutWithCreateWord(appViewModel){
+                    MainLayout(
+                        navController = navController,
+                        selectedItem=selectedItem,
+                        setSelectedItem = {selectedItem = it}
+                    ) {
+                        QuickView(navController, appViewModel)
+                    }
                 }
             }
 
             composable("dictionary") {
-                MainLayout(
-                    navController = navController,
-                    selectedItem=selectedItem,
-                    setSelectedItem = {selectedItem = it}
-                ) {
-                    Main(navController)
+                LayoutWithCreateWord(appViewModel){
+                    MainLayout(
+                        navController = navController,
+                        selectedItem = selectedItem,
+                        setSelectedItem = { selectedItem = it }
+                    ) {
+                        Vocabulary(navController, appViewModel)
+                    }
                 }
             }
 

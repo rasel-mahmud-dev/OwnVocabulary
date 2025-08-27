@@ -3,19 +3,17 @@ package com.rs.ownvocabulary.sync
 import kotlinx.coroutines.delay
 import com.google.gson.Gson
 import com.rs.ownvocabulary.api.HttpHelper
-import com.rs.notenet.sync.NoConnectionException
-import com.rs.notenet.sync.SyncManager
-import com.rs.ownvocabulary.database.Word
+import com.rs.ownvocabulary.database.WordPartial
 
 
 data class PullNoteJobResponse(
     val status: String,
-    val data: List<Word>,
+    val data: List<WordPartial>,
     val hasMore: Boolean,
 )
 
 class PullWordJob(
-    private val saveNotes: (List<Word>) -> Unit,
+    private val saveNotes: (List<WordPartial>) -> Unit,
     private val isConnected: () -> Boolean,
     private val onSyncComplete: () -> Unit = {}
 ) {
@@ -34,24 +32,30 @@ class PullWordJob(
 
         do {
             val lastTime = SyncManager.getLastSyncTime()
-            val lastId = SyncManager.getLastId()
             val startTime = System.currentTimeMillis()
 
-            println("lastTime ${lastTime} lastId ${lastId}")
+            println("lastTime ${lastTime}")
 
             val response = tryWithRetry {
                 if (!isConnected()) throw NoConnectionException()
-                httpHelper.get("/api/v2/diary/pull?since=$lastTime&last_id=$lastId")
+                httpHelper.get("/api/v2/word/pull?since=$lastTime")
             }
+
             if (response.statusCode != 200) break
             val data = parseNotes(response.body ?: "")
 
             if (data.data.isNotEmpty()) {
-                val lastNote = data.data.last()
-                SyncManager.updateLastSyncTime(lastNote.updatedAt)
-                SyncManager.updateLastId(lastNote.uid)
-                println("update:: ${data.data.size}")
-                saveNotes(data.data)
+                try {
+                    println("update:: ${data.data.size}")
+                    saveNotes(data.data)
+
+                    val lastNote = data.data.last()
+                    val lastItemUpdatedAt = lastNote.updatedAt ?: System.currentTimeMillis()
+                    println("lastItemUpdatedAt ${lastItemUpdatedAt}")
+                    SyncManager.updateLastSyncTime(lastItemUpdatedAt)
+                } catch (e: Exception) {
+                    println("here an exception:: $e")
+                }
             }
 
             if (!data.hasMore || data.data.isEmpty()) {
@@ -67,8 +71,7 @@ class PullWordJob(
     private fun parseNotes(json: String): PullNoteJobResponse {
         try {
             return gson.fromJson(json, PullNoteJobResponse::class.java)
-        } catch (e: Exception) {
-            println(e)
+        } catch (_: Exception) {
             return PullNoteJobResponse(
                 status = "failed",
                 data = emptyList(),

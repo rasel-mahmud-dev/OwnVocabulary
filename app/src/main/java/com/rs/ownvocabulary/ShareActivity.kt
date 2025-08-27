@@ -27,7 +27,6 @@ import androidx.compose.ui.zIndex
 import androidx.compose.material3.Button
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.min
-import com.rs.ownvocabulary.composeable.AddWordDialog
 import com.rs.ownvocabulary.composeable.AddWordDialogShare
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 import com.rs.ownvocabulary.ui.theme.OwnVocabularyTheme

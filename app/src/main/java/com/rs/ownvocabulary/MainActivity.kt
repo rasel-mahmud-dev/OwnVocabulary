@@ -10,6 +10,7 @@ import androidx.annotation.RequiresApi
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import com.rs.ownvocabulary.sync.SyncManager
 import com.rs.ownvocabulary.ui.theme.OwnVocabularyTheme
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
@@ -17,6 +18,8 @@ class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        SyncManager.initialize(application)
+
         enableEdgeToEdge()
         setContent {
             val application = applicationContext as Application
@@ -25,6 +28,7 @@ class MainActivity : ComponentActivity() {
             }
 
             viewModel.startWordSync()
+            viewModel.pullWordFromServer()
 
             OwnVocabularyTheme {
                 Surface(modifier = Modifier) {

@@ -434,7 +434,7 @@ private fun WordStatsCard(word: Word) {
             StatItem(
                 icon = Icons.Outlined.Schedule,
                 label = "Last viewed",
-                value = if (word.lastViewedDaysAgo == 0) "Today" else "${word.lastViewedDaysAgo}d ago"
+                value = if (word.lastVisited == 0L) "Today" else "${word.lastVisited}d ago"
             )
 
             VerticalDivider(

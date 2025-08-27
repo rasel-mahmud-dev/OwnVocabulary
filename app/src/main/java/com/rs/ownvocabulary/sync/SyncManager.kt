@@ -1,4 +1,4 @@
-package com.rs.notenet.sync
+package com.rs.ownvocabulary.sync
 
 import android.content.SharedPreferences
 import android.content.Context

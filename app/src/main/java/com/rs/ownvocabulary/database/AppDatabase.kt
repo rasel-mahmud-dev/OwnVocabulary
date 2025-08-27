@@ -5,15 +5,18 @@ import android.content.Context
 import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
+import android.util.Log
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.Executors
 import java.util.*
+import kotlin.collections.forEach
 
 data class Word(
     val id: Long = 0,
     val uid: String = UUID.randomUUID().toString(),
     val word: String,
+    val userId: String,
     val type: String = "word",
     val shortMeaning: String = "",
     val details: String = "",
@@ -21,7 +24,7 @@ data class Word(
     val isFavorite: Boolean = false,
     val proficiencyLevel: String = "Beginner",
     val viewCount: Int = 0,
-    val lastViewedDaysAgo: Int = 0,
+    val lastVisited: Long = 0L,
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
     val syncStatus: SyncStatus = SyncStatus.PENDING,
@@ -32,6 +35,7 @@ data class Word(
 data class WordPartial(
     val id: Long = 0,
     val uid: String,
+    val userId: String? = null,
     val word: String? = null,
     val type: String? = null,
     val shortMeaning: String? = null,
@@ -40,10 +44,12 @@ data class WordPartial(
     val isFavorite: Boolean? = null,
     val proficiencyLevel: String? = null,
     val viewCount: Int? = null,
-    val lastViewedDaysAgo: Int? = null,
+    val lastVisited: Long? = null,
     val syncStatus: SyncStatus? = null,
     val retryCount: Int? = null,
-    val lastSyncAttempt: Long? = null
+    val lastSyncAttempt: Long? = null,
+    val createdAt: Long? = null,
+    val updatedAt: Long? = null
 )
 
 enum class SyncStatus {
@@ -70,15 +76,17 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         private const val COLUMN_UID = "uid"
         private const val COLUMN_WORD = "word"
         private const val COLUMN_TYPE = "type"
+        private const val COLUMN_USER_ID = "user_id"
         private const val COLUMN_SHORT_MEANING = "short_meaning"
         private const val COLUMN_DETAILS = "details"
         private const val COLUMN_EXAMPLES = "examples"
         private const val COLUMN_IS_FAVORITE = "is_favorite"
         private const val COLUMN_PROFICIENCY_LEVEL = "proficiency_level"
         private const val COLUMN_VIEW_COUNT = "view_count"
-        private const val COLUMN_LAST_VIEWED_DAYS_AGO = "last_viewed_days_ago"
+        private const val COLUMN_LAST_VIEWED = "last_viewed"
         private const val COLUMN_CREATED_AT = "created_at"
         private const val COLUMN_UPDATED_AT = "updated_at"
+
         private const val COLUMN_SYNC_STATUS = "sync_status"
         private const val COLUMN_RETRY_COUNT = "retry_count"
         private const val COLUMN_LAST_SYNC_ATTEMPT = "last_sync_attempt"
@@ -98,15 +106,16 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
             CREATE TABLE IF NOT EXISTS $TABLE_WORDS (
                 $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 $COLUMN_UID TEXT UNIQUE NOT NULL,
-                $COLUMN_WORD TEXT NOT NULL,
+                $COLUMN_WORD TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 $COLUMN_TYPE TEXT DEFAULT 'word',
                 $COLUMN_SHORT_MEANING TEXT DEFAULT '',
                 $COLUMN_DETAILS TEXT DEFAULT '',
+                $COLUMN_USER_ID TEXT DEFAULT '',
                 $COLUMN_EXAMPLES TEXT DEFAULT '',
                 $COLUMN_IS_FAVORITE INTEGER DEFAULT 0,
                 $COLUMN_PROFICIENCY_LEVEL TEXT DEFAULT 'Beginner',
                 $COLUMN_VIEW_COUNT INTEGER DEFAULT 0,
-                $COLUMN_LAST_VIEWED_DAYS_AGO INTEGER DEFAULT 0,
+                $COLUMN_LAST_VIEWED INTEGER DEFAULT 0,
                 $COLUMN_CREATED_AT INTEGER NOT NULL,
                 $COLUMN_UPDATED_AT INTEGER NOT NULL,
                 $COLUMN_SYNC_STATUS TEXT DEFAULT 'PENDING',
@@ -179,28 +188,86 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         }
     }
 
+    fun totalWordCount(callback: (Int) -> Unit) {
+        executor.execute {
+            val db = readableDatabase
+            val query = "SELECT COUNT(*) FROM $TABLE_WORDS WHERE $COLUMN_SYNC_STATUS != ?"
+            val cursor = db.rawQuery(query, arrayOf(SyncStatus.DELETED.name))
+            var count = 0
+            if (cursor.moveToFirst()) {
+                count = cursor.getInt(0)
+            }
+            cursor.close()
+            callback(count)
+        }
+    }
+
+    // Get frequently viewed words (most viewed in last 30 days)
+    fun getFrequentViewWords(includeFavorite: Boolean = false, callback: (List<Word>) -> Unit) {
+        executor.execute {
+            val words = mutableListOf<Word>()
+            val db = readableDatabase
+
+            val thirtyDaysAgo = System.currentTimeMillis() - (30 * 24 * 60 * 60 * 1000L)
+
+            var selection = "$COLUMN_SYNC_STATUS != ? AND ($COLUMN_LAST_VIEWED >= ? AND $COLUMN_VIEW_COUNT > 0) AND $COLUMN_IS_FAVORITE = 0 "
+            val selectionArgs = arrayOf(SyncStatus.DELETED.name, thirtyDaysAgo.toString())
+
+
+            val cursor = db.query(
+                TABLE_WORDS,
+                null,
+                selection,
+                selectionArgs,
+                null,
+                null,
+                "$COLUMN_VIEW_COUNT DESC LIMIT 500"
+            )
+
+            cursor.use {
+                while (it.moveToNext()) {
+                    words.add(getWordFromCursor(it))
+                }
+            }
+            callback(words)
+        }
+    }
+
     fun insertWord(word: Word, callback: (Long) -> Unit = {}) {
         executor.execute {
             val db = writableDatabase
-            val values = ContentValues().apply {
-                put(COLUMN_UID, word.uid)
-                put(COLUMN_WORD, word.word)
-                put(COLUMN_TYPE, word.type)
-                put(COLUMN_SHORT_MEANING, word.shortMeaning)
-                put(COLUMN_DETAILS, word.details)
-                put(COLUMN_EXAMPLES, word.examples)
-                put(COLUMN_IS_FAVORITE, if (word.isFavorite) 1 else 0)
-                put(COLUMN_PROFICIENCY_LEVEL, word.proficiencyLevel)
-                put(COLUMN_VIEW_COUNT, word.viewCount)
-                put(COLUMN_LAST_VIEWED_DAYS_AGO, word.lastViewedDaysAgo)
-                put(COLUMN_CREATED_AT, word.createdAt)
-                put(COLUMN_UPDATED_AT, word.updatedAt)
-                put(COLUMN_SYNC_STATUS, word.syncStatus.name)
-                put(COLUMN_RETRY_COUNT, word.retryCount)
-                word.lastSyncAttempt?.let { put(COLUMN_LAST_SYNC_ATTEMPT, it) }
+            var resultId = -1L
+            try {
+                val values = ContentValues().apply {
+                    put(COLUMN_UID, word.uid)
+                    put(COLUMN_WORD, word.word)
+                    put(COLUMN_TYPE, word.type)
+                    put(COLUMN_USER_ID, word.userId)
+                    put(COLUMN_SHORT_MEANING, word.shortMeaning)
+                    put(COLUMN_DETAILS, word.details)
+                    put(COLUMN_EXAMPLES, word.examples)
+                    put(COLUMN_IS_FAVORITE, if (word.isFavorite) 1 else 0)
+                    put(COLUMN_PROFICIENCY_LEVEL, word.proficiencyLevel)
+                    put(COLUMN_VIEW_COUNT, word.viewCount)
+                    put(COLUMN_LAST_VIEWED, word.lastVisited)
+                    put(COLUMN_CREATED_AT, word.createdAt)
+                    put(COLUMN_UPDATED_AT, word.updatedAt)
+                    put(COLUMN_SYNC_STATUS, word.syncStatus.name)
+                    put(COLUMN_RETRY_COUNT, word.retryCount)
+                    word.lastSyncAttempt?.let { put(COLUMN_LAST_SYNC_ATTEMPT, it) }
+                }
+                resultId = db.insertWithOnConflict(
+                    TABLE_WORDS,
+                    null,
+                    values,
+                    SQLiteDatabase.CONFLICT_IGNORE
+                )
+                callback(resultId)
+
+            } catch (ex: Exception) {
+                Log.e("Database", "Error inserting word: ${ex.message}")
+                callback(-1L)
             }
-            val id = db.insert(TABLE_WORDS, null, values)
-            callback(id)
         }
     }
 
@@ -208,13 +275,14 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         val db = writableDatabase
         val values = ContentValues().apply {
             put(COLUMN_WORD, word.word)
+            put(COLUMN_USER_ID, word.userId)
             put(COLUMN_SHORT_MEANING, word.shortMeaning)
             put(COLUMN_DETAILS, word.details)
             put(COLUMN_EXAMPLES, word.examples)
             put(COLUMN_IS_FAVORITE, if (word.isFavorite) 1 else 0)
             put(COLUMN_PROFICIENCY_LEVEL, word.proficiencyLevel)
             put(COLUMN_VIEW_COUNT, word.viewCount)
-            put(COLUMN_LAST_VIEWED_DAYS_AGO, word.lastViewedDaysAgo)
+            put(COLUMN_LAST_VIEWED, word.lastVisited)
             put(COLUMN_UPDATED_AT, System.currentTimeMillis())
             put(COLUMN_SYNC_STATUS, SyncStatus.PENDING.name)
         }
@@ -227,18 +295,73 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         )
     }
 
+    fun upsertWord(words: List<WordPartial>) {
+        if (words.isEmpty()) return
+
+        val db = writableDatabase
+        try {
+            db.beginTransaction()
+            words.forEach { word ->
+                val values = ContentValues().apply {
+                    put(COLUMN_UID, word.uid)
+                    put(COLUMN_WORD, word.word ?: "")
+                    put(COLUMN_USER_ID, word.userId ?: "")
+                    put(COLUMN_TYPE, word.type ?: "word")
+                    put(COLUMN_SHORT_MEANING, word.shortMeaning ?: "")
+                    put(COLUMN_DETAILS, word.details ?: "")
+                    put(COLUMN_EXAMPLES, word.examples ?: "")
+                    put(COLUMN_IS_FAVORITE, if (word.isFavorite == true) 1 else 0)
+                    put(COLUMN_PROFICIENCY_LEVEL, word.proficiencyLevel ?: "")
+                    put(COLUMN_VIEW_COUNT, word.viewCount ?: 0)
+                    put(COLUMN_LAST_VIEWED, word.lastVisited ?: 0)
+                    put(COLUMN_SYNC_STATUS, word.syncStatus?.name ?: SyncStatus.SYNCED.name)
+                    put(COLUMN_RETRY_COUNT, word.retryCount ?: 0)
+                    put(COLUMN_LAST_SYNC_ATTEMPT, word.lastSyncAttempt ?: 0)
+
+                    val now = System.currentTimeMillis()
+                    if (word.id == 0L) {
+                        put(COLUMN_CREATED_AT, word.createdAt ?: now)
+                    }
+                    put(COLUMN_UPDATED_AT, word.updatedAt ?: now)
+                }
+
+                val rowsAffected = db.update(
+                    TABLE_WORDS,
+                    values,
+                    "$COLUMN_UID = ?",
+                    arrayOf(word.uid)
+                )
+
+                if (rowsAffected == 0) {
+                    db.insert(TABLE_WORDS, null, values)
+                }
+            }
+            db.setTransactionSuccessful()
+        } catch (e: Exception) {
+            Log.e("Database", "Transaction failed: ${e.message}")
+            throw e
+        } finally {
+            try {
+                db.endTransaction()
+            } catch (e: Exception) {
+                Log.e("Database", "Error ending transaction: ${e.message}")
+            }
+        }
+    }
+
     suspend fun updatePartial(partialWord: WordPartial): Int = withContext(Dispatchers.IO) {
         val db = writableDatabase
         val values = ContentValues().apply {
             partialWord.word?.let { put(COLUMN_WORD, it) }
             partialWord.type?.let { put(COLUMN_TYPE, it) }
+            partialWord.userId?.let { put(COLUMN_USER_ID, it) }
             partialWord.shortMeaning?.let { put(COLUMN_SHORT_MEANING, it) }
             partialWord.details?.let { put(COLUMN_DETAILS, it) }
             partialWord.examples?.let { put(COLUMN_EXAMPLES, it) }
             partialWord.isFavorite?.let { put(COLUMN_IS_FAVORITE, if (it) 1 else 0) }
             partialWord.proficiencyLevel?.let { put(COLUMN_PROFICIENCY_LEVEL, it) }
             partialWord.viewCount?.let { put(COLUMN_VIEW_COUNT, it) }
-            partialWord.lastViewedDaysAgo?.let { put(COLUMN_LAST_VIEWED_DAYS_AGO, it) }
+            partialWord.lastVisited?.let { put(COLUMN_LAST_VIEWED, it) }
             partialWord.syncStatus?.let { put(COLUMN_SYNC_STATUS, it.name) }
             partialWord.retryCount?.let { put(COLUMN_RETRY_COUNT, it) }
             partialWord.lastSyncAttempt?.let { put(COLUMN_LAST_SYNC_ATTEMPT, it) }
@@ -266,8 +389,7 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
     suspend fun incrementViewCount(uid: String): Int = withContext(Dispatchers.IO) {
         val db = writableDatabase
         val values = ContentValues().apply {
-            put(COLUMN_LAST_VIEWED_DAYS_AGO, 0)
-            put(COLUMN_UPDATED_AT, System.currentTimeMillis())
+            put(COLUMN_LAST_VIEWED, System.currentTimeMillis())
         }
 
         db.execSQL(
@@ -342,7 +464,8 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
             val words = mutableListOf<Word>()
             val db = readableDatabase
 
-            val selection = "($COLUMN_WORD LIKE ? OR $COLUMN_SHORT_MEANING LIKE ? OR $COLUMN_DETAILS LIKE ?) AND $COLUMN_SYNC_STATUS != ?"
+            val selection =
+                "($COLUMN_WORD LIKE ? OR $COLUMN_SHORT_MEANING LIKE ? OR $COLUMN_DETAILS LIKE ?) AND $COLUMN_SYNC_STATUS != ?"
             val selectionArgs = arrayOf("%$query%", "%$query%", "%$query%", SyncStatus.DELETED.name)
 
             val cursor = db.query(
@@ -506,18 +629,24 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
             id = CursorUtils.getLongSafe(cursor, COLUMN_ID) ?: 0L,
             uid = CursorUtils.getStringSafe(cursor, COLUMN_UID) ?: "",
             word = CursorUtils.getStringSafe(cursor, COLUMN_WORD) ?: "",
+            userId = CursorUtils.getStringSafe(cursor, COLUMN_USER_ID) ?: "",
             type = CursorUtils.getStringSafe(cursor, COLUMN_TYPE) ?: "",
             shortMeaning = CursorUtils.getStringSafe(cursor, COLUMN_SHORT_MEANING) ?: "",
             details = CursorUtils.getStringSafe(cursor, COLUMN_DETAILS) ?: "",
             examples = CursorUtils.getStringSafe(cursor, COLUMN_EXAMPLES) ?: "",
             isFavorite = (CursorUtils.getIntSafe(cursor, COLUMN_IS_FAVORITE) ?: 0) == 1,
-            proficiencyLevel = CursorUtils.getStringSafe(cursor, COLUMN_PROFICIENCY_LEVEL) ?: "Beginner",
+            proficiencyLevel = CursorUtils.getStringSafe(cursor, COLUMN_PROFICIENCY_LEVEL)
+                ?: "Beginner",
             viewCount = CursorUtils.getIntSafe(cursor, COLUMN_VIEW_COUNT) ?: 0,
-            lastViewedDaysAgo = CursorUtils.getIntSafe(cursor, COLUMN_LAST_VIEWED_DAYS_AGO) ?: 0,
-            createdAt = CursorUtils.getLongSafe(cursor, COLUMN_CREATED_AT) ?: System.currentTimeMillis(),
-            updatedAt = CursorUtils.getLongSafe(cursor, COLUMN_UPDATED_AT) ?: System.currentTimeMillis(),
+            lastVisited = CursorUtils.getLongSafe(cursor, COLUMN_LAST_VIEWED) ?: 0,
+            createdAt = CursorUtils.getLongSafe(cursor, COLUMN_CREATED_AT)
+                ?: System.currentTimeMillis(),
+            updatedAt = CursorUtils.getLongSafe(cursor, COLUMN_UPDATED_AT)
+                ?: System.currentTimeMillis(),
             syncStatus = try {
-                SyncStatus.valueOf(CursorUtils.getStringSafe(cursor, COLUMN_SYNC_STATUS) ?: "PENDING")
+                SyncStatus.valueOf(
+                    CursorUtils.getStringSafe(cursor, COLUMN_SYNC_STATUS) ?: "PENDING"
+                )
             } catch (e: IllegalArgumentException) {
                 SyncStatus.PENDING
             },

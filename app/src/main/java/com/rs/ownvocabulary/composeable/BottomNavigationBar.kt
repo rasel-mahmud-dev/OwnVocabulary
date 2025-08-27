@@ -12,10 +12,12 @@ import androidx.compose.material.icons.outlined.Analytics
 import androidx.compose.material.icons.outlined.Book
 import androidx.compose.material.icons.outlined.Home
 import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.SpatialAudioOff
 import androidx.compose.material.icons.rounded.Analytics
 import androidx.compose.material.icons.rounded.Book
 import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.Person
+import androidx.compose.material.icons.rounded.SpatialAudioOff
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -66,6 +68,12 @@ fun BottomNavigationBar(
                 "Dictionary",
                 Icons.Rounded.Book,
                 Icons.Outlined.Book,
+                "dictionary"
+            ),
+            ModernNavItem(
+                "Speaking",
+                Icons.Rounded.SpatialAudioOff,
+                Icons.Outlined.SpatialAudioOff,
                 "dictionary"
             ),
             ModernNavItem(

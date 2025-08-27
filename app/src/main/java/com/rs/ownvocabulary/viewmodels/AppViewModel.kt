@@ -1,6 +1,5 @@
 package com.rs.ownvocabulary.viewmodels
 
-import android.annotation.SuppressLint
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -19,10 +18,13 @@ import kotlinx.coroutines.launch
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import android.os.Build
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.lifecycle.application
-import androidx.lifecycle.viewmodel.compose.viewModel
-import com.rs.notenet.sync.PushWordJob
+import com.rs.ownvocabulary.database.SortOrder
+import com.rs.ownvocabulary.sync.PushWordJob
 import kotlinx.coroutines.delay
 
 
@@ -40,6 +42,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _words = MutableStateFlow<List<Word>>(emptyList())
     val words: StateFlow<List<Word>> = _words.asStateFlow()
 
+    private val _totalWord = MutableStateFlow<Int>(0)
+    val totalWord: StateFlow<Int> = _totalWord.asStateFlow()
+
+    private val _openAddWordDialog = MutableStateFlow<Boolean>(false)
+    val openAddWordDialog: StateFlow<Boolean> = _openAddWordDialog.asStateFlow()
 
     private var activeSyncJob: Job? = null
 
@@ -49,9 +56,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadWords() {
         viewModelScope.launch {
-            db.getAllWords {
+            db.getAllWords(SortOrder.WordAsc) {
                 _words.value = it
 
+            }
+        }
+    }
+
+    fun setAddWordDialog(state: Boolean) {
+        _openAddWordDialog.value = state
+    }
+
+    fun loadTotalWordCount() {
+        viewModelScope.launch {
+            db.totalWordCount {
+                _totalWord.value = it
             }
         }
     }
@@ -109,6 +128,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         println("has nwet ${isNetworkAvailable(application)}")
 
         loadWords()
+        loadTotalWordCount()
     }
 
     fun startWordSync() {
@@ -130,7 +150,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     isConnected = { isNetworkAvailable(application) },
                     getUnsyncedNotes = { unsyncedNotes },
                     updateNoteSyncStatus = { id, status, retryCount ->
-                        println("sdf sdf $id, status $status, $retryCount")
                         db.updateWordSyncStatus(id, status, retryCount)
                     }
                 )
@@ -144,37 +163,32 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    //
-//
-//    fun pullNoteFromServer() {
-//        activePullSyncJob?.cancel()
-////        _syncStatus.value = "Starting sync..."
-//
-//        activePullSyncJob = viewModelScope.launch {
-//            try {
-//                println("pulling notes")
-//                setPulling(true)
-//                val pullJob = PullNotesJob(
-//                    isConnected = { isNetworkAvailable() },
-//                    saveNotes = { notes ->
-//                        noteDb.upsertNotes(notes)
-//                        println("notes saved")
-//                    },
-//
-//                    onSyncComplete = {
-//                        println("done syncing")
-//                        setPulling(false)
-//                    }
-//                )
-//
-//                pullJob.startPulling()
-//
-//            } catch (e: Exception) {
-//                println("Sync failed: ${e.message}")
-//            }
-//        }
-//    }
-//
+    fun pullWordFromServer() {
+        activePullSyncJob?.cancel()
+        activePullSyncJob = viewModelScope.launch {
+            try {
+                println("pulling words")
+                val pullJob = PullWordJob(
+                    isConnected = { isNetworkAvailable(application) },
+                    saveNotes = { notes ->
+                        db.upsertWord(notes)
+                        println("notes saved")
+                    },
+
+                    onSyncComplete = {
+                        println("done syncing")
+                        loadWords()
+                    }
+                )
+
+                pullJob.startPulling()
+
+            } catch (e: Exception) {
+                println("Sync failed: ${e.message}")
+            }
+        }
+    }
+
     private fun updateProgress(totalNotes: Int, status: SyncStatus) {
 //        val currentState = _syncStatus.value
 //        if (currentState is SyncState.InProgress) {

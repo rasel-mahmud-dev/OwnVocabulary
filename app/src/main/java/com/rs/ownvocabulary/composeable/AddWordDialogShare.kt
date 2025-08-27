@@ -1,6 +1,7 @@
 package com.rs.ownvocabulary.composeable
 
 import android.annotation.SuppressLint
+import android.widget.Toast
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -24,12 +25,14 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.DialogProperties
 import com.rs.ownvocabulary.database.Word
+import com.rs.ownvocabulary.utils.DeviceId
 
 
 @SuppressLint("ConfigurationScreenWidthHeight")
@@ -44,6 +47,7 @@ fun AddWordDialogShare(
 ) {
     if (!showDialog) return
 
+    val context = LocalContext.current
     var word by remember { mutableStateOf(incomingWord ?: "") }
     var shortMeaning by remember { mutableStateOf("") }
     var details by remember { mutableStateOf("") }
@@ -53,6 +57,7 @@ fun AddWordDialogShare(
     var expanded by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
+    val userId = remember { DeviceId.getDeviceId(context) }
 
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp.dp
@@ -71,7 +76,7 @@ fun AddWordDialogShare(
     )
 
     LaunchedEffect(editItem) {
-        if(editItem != null){
+        if (editItem != null) {
             word = editItem.word
             shortMeaning = editItem.shortMeaning
             details = editItem.details
@@ -102,7 +107,7 @@ fun AddWordDialogShare(
                 )
                 Spacer(modifier = Modifier.width(12.dp))
                 Text(
-                    "${if(isUpdate) "Update " else "Add New "} Word",
+                    "${if (isUpdate) "Update " else "Add New "} Word",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onSurface
@@ -299,16 +304,35 @@ fun AddWordDialogShare(
 
                 Button(
                     onClick = {
-                        if (word.isNotBlank()) {
+                        val trimmedWord = word.trim()
+                        if (trimmedWord.isBlank()) {
+                            Toast.makeText(context, "Please enter a word", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        val wordsToAdd = trimmedWord.split(",", "\n", "\r\n")
+                            .map { it.trim() }
+                            .filter { it.isNotBlank() }
+                            .distinct()
+
+                        println("wordsToAdd $wordsToAdd")
+
+                        if (wordsToAdd.isEmpty()) {
+                            Toast.makeText(context, "Please enter valid words", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
+                        wordsToAdd.forEach { singleWord ->
                             val newWord = Word(
-                                word = word.trim(),
+                                word = singleWord,
                                 shortMeaning = shortMeaning.trim(),
                                 details = details.trim(),
                                 examples = examples.trim(),
                                 isFavorite = isFavorite,
                                 proficiencyLevel = proficiencyLevel,
                                 viewCount = 0,
-                                lastViewedDaysAgo = 0
+                                lastVisited = 0,
+                                userId = userId
                             )
                             onAddWord(newWord)
                         }

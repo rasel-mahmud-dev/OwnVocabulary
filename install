@@ -1,0 +1,4 @@
+adb uninstall com.rs.ownvocabulary
+adb install ./app/debug/app-debug.apk
+# adb install ./app/release/app-release.apk
+# adb shell monkey -p com.rs.ownvocabulary -c android.intent.category.LAUNCHER 1

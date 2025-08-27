@@ -1,4 +1,4 @@
-package com.rs.notenet.sync
+package com.rs.ownvocabulary.sync
 
 import com.google.gson.Gson
 import com.rs.ownvocabulary.api.HttpHelper
@@ -79,7 +79,7 @@ class PushWordJob(
 
     private suspend fun createNote(note: Word, isUpdate: Boolean) {
         if (!isConnected()) throw NoConnectionException()
-        println("create word;;; ${note.word}")
+        println("pushing word -> ${note.word}")
         if (!isConnected()) throw NoConnectionException()
         val noteJson = gson.toJson(note)
         val response = httpHelper.put("/api/v2/word/${note.uid}", noteJson)
