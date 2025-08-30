@@ -123,6 +123,7 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
             }
 
             composable("dictionary") {
+                QuickWordViewLayout(appViewModel) {
                 LayoutWithCreateWord(appViewModel) {
                     MainLayout(
                         navController = navController,
@@ -131,6 +132,7 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
                     ) {
                         Vocabulary(navController, appViewModel)
                     }
+                }
                 }
             }
 

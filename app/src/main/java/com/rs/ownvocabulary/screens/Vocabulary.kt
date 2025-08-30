@@ -237,6 +237,7 @@ fun Vocabulary(navHostController: NavHostController, appViewModel: AppViewModel)
                         listState = listState,
                         gridState = gridState,
                         onToggleLove = ::toggleLove,
+                        onWordLongPress = { appViewModel.setLongPressItem(it) },
                         onWordClick = { word ->
                             navHostController.navigate("word_detail/${word.uid}")
                         }
@@ -302,7 +303,8 @@ fun WordsContent(
     listState: androidx.compose.foundation.lazy.LazyListState,
     gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
     onToggleLove: (Word) -> Unit,
-    onWordClick: (Word) -> Unit
+    onWordClick: (Word) -> Unit,
+    onWordLongPress: (Word) -> Unit
 ) {
     AnimatedContent(
         targetState = isGridView,
@@ -320,7 +322,7 @@ fun WordsContent(
                         word = word,
                         onToggleLove = { onToggleLove(word) },
                         onItemClick = { onWordClick(word) },
-                        onItemLongPress = {},
+                        onItemLongPress = { onWordLongPress(word) },
                     )
                 }
             }

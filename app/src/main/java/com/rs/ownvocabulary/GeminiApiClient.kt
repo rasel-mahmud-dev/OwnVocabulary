@@ -14,7 +14,7 @@ import kotlin.apply
 class GeminiApiClient {
     private val client = OkHttpClient()
     private val apiKeys = listOf(
-
+        
     )
     private val apiKey = apiKeys.random()
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
