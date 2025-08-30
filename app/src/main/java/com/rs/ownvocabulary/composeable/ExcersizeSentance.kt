@@ -1,19 +1,14 @@
 package com.rs.ownvocabulary.composeable
 
-import android.graphics.drawable.Icon
-import androidx.compose.animation.scaleOut
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Icon
@@ -36,6 +31,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.rs.ownvocabulary.GeminiApiClient
+import com.rs.ownvocabulary.TTSManager
 import com.rs.ownvocabulary.database.AIResponseItem
 import com.rs.ownvocabulary.database.Word
 import com.rs.ownvocabulary.viewmodels.AppViewModel
@@ -57,9 +53,9 @@ fun ExcersizeSentance(
     var generationCount by remember { mutableIntStateOf(0) }
     var allGeneratedSentences by remember { mutableStateOf<List<AIResponseItem>>(emptyList()) }
 
-    fun loadAiGeneratedResponse(input: String){
+    fun loadAiGeneratedResponse(input: String) {
         scope.launch {
-            appViewModel.loadAiGeneratedResponse(input){
+            appViewModel.loadAiGeneratedResponse(input) {
                 allGeneratedSentences = it
             }
         }
@@ -71,7 +67,7 @@ fun ExcersizeSentance(
 
     fun handleDelete(uid: String) {
         scope.launch {
-            appViewModel.aiResponseDb.delete(uid){
+            appViewModel.aiResponseDb.delete(uid) {
                 allGeneratedSentences = allGeneratedSentences.filter { it.uid != uid }
             }
         }
@@ -80,7 +76,7 @@ fun ExcersizeSentance(
     fun handleGenerate() {
         scope.launch {
 
-            if(appViewModel.currentUser.value == null){
+            if (appViewModel.currentUser.value == null) {
                 return@launch
             }
 
@@ -90,14 +86,16 @@ fun ExcersizeSentance(
                 generationCount
             )
 
-            newSentences.forEachIndexed  { index, it ->
-                appViewModel.addAiResponse(AIResponseItem(
-                    input = word.word,
-                    output = it,
-                    userId = appViewModel.currentUser.value!!.userId,
-                    type = "word",
-                )){
-                    if(index == newSentences.size - 1) {
+            newSentences.forEachIndexed { index, it ->
+                appViewModel.addAiResponse(
+                    AIResponseItem(
+                        input = word.word,
+                        output = it,
+                        userId = appViewModel.currentUser.value!!.userId,
+                        type = "word",
+                    )
+                ) {
+                    if (index == newSentences.size - 1) {
                         loadAiGeneratedResponse(word.word)
                     }
                 }
@@ -143,19 +141,25 @@ fun ExcersizeSentance(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
+
                         text = "• ${sentence.output}",
                         modifier = Modifier
                             .weight(1f)
                             .padding(8.dp)
+                            .clickable {
+                                TTSManager.speakOnlyEnglish(sentence.output)
+                            }
                     )
 
                     IconButton(
+                        modifier = Modifier.size(30.dp),
                         onClick = { handleDelete(sentence.uid) }
                     ) {
                         Icon(
+                            modifier = Modifier.size(16.dp),
                             imageVector = Icons.Default.Delete,
                             contentDescription = "Delete",
-                            tint = Color.Gray
+                            tint = Color.Red
                         )
                     }
                 }

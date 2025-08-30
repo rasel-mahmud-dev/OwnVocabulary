@@ -26,6 +26,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
+import com.rs.ownvocabulary.TTSManager
 import com.rs.ownvocabulary.composeable.AddAnExample
 import com.rs.ownvocabulary.composeable.AddWordDialogShare
 import com.rs.ownvocabulary.composeable.ExcersizeSentance
@@ -242,19 +243,8 @@ private fun WordHeaderCard(
 
     val context = LocalContext.current
 
-    val tts = remember {
-        TextToSpeech(context) {}
-    }
-
-    DisposableEffect(Unit) {
-        onDispose {
-            tts.stop()
-            tts.shutdown()
-        }
-    }
-
     fun handlePlaySound(word: String) {
-        tts.speak(word, TextToSpeech.QUEUE_FLUSH, null, null)
+        TTSManager.speak(word)
     }
 
     val cardColors = when (word.proficiencyLevel) {
@@ -428,42 +418,6 @@ private fun WordHeaderCard(
 }
 
 @Composable
-private fun WordStatsCard(word: Word) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainerHigh
-        )
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(20.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
-        ) {
-            StatItem(
-                icon = Icons.Outlined.Visibility,
-                label = "Views",
-                value = word.viewCount.toString()
-            )
-
-            VerticalDivider(
-                modifier = Modifier.height(56.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
-
-            StatItem(
-                icon = Icons.Outlined.Schedule,
-                label = "Last viewed",
-                value = if (word.lastVisited == 0L) "Today" else DateFormatter.formatToRelativeTime(
-                    word.createdAt
-                )
-            )
-        }
-    }
-}
-
-@Composable
 private fun StatItem(
     icon: ImageVector,
     label: String,
@@ -532,140 +486,6 @@ private fun DefinitionCard(
             )
         }
 
-}
-
-@Composable
-private fun ExpandableSection(
-    refetchWordDetail: () -> Unit,
-    uid: String,
-    title: String,
-    examples: String,
-    icon: ImageVector,
-    isExpanded: Boolean,
-    onToggle: () -> Unit,
-    content: @Composable () -> Unit,
-    appViewModel: AppViewModel
-) {
-
-    var isAddExampleMode by remember { mutableStateOf(false) }
-
-    if (isAddExampleMode) {
-        AddAnExample(
-            exampleText = null,
-            showDialog = true,
-            onDismiss = {
-                isAddExampleMode = false
-            },
-            onAction = {
-                appViewModel.updatePartial(
-                    WordPartial(
-                        uid = uid,
-                        syncStatus = SyncStatus.PENDING,
-                        examples = examples + "\n" + it
-                    )
-                ) {
-                    refetchWordDetail()
-                    isAddExampleMode = false
-                }
-            }
-        )
-    }
-
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surfaceContainer
-        )
-    ) {
-        Column {
-            // Header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .clickable { onToggle() }
-                    .padding(20.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Icon(
-                        imageVector = icon,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.size(24.dp)
-                    )
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleLarge,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        fontWeight = FontWeight.Bold
-                    )
-                }
-
-
-                Row(
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-
-                    IconButton(onClick = { isAddExampleMode = true }) {
-                        Icon(
-                            imageVector = Icons.Default.Add,
-                            contentDescription = "add example",
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-
-                    val rotationAngle by animateFloatAsState(
-                        targetValue = if (isExpanded) 180f else 0f,
-                        animationSpec = tween(300),
-                        label = "rotation"
-                    )
-
-                    Icon(
-                        imageVector = Icons.Default.ExpandMore,
-                        contentDescription = if (isExpanded) "Collapse" else "Expand",
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier
-                            .size(28.dp)
-                            .graphicsLayer(rotationZ = rotationAngle)
-                    )
-                }
-            }
-
-            AnimatedVisibility(
-                visible = isExpanded,
-                enter = fadeIn(animationSpec = tween(300)) + expandVertically(
-                    animationSpec = tween(
-                        300
-                    )
-                ),
-                exit = fadeOut(animationSpec = tween(200)) + shrinkVertically(
-                    animationSpec = tween(
-                        200
-                    )
-                )
-            ) {
-                Column(
-                    modifier = Modifier.padding(
-                        start = 20.dp,
-                        end = 20.dp,
-                        bottom = 20.dp
-                    )
-                ) {
-                    HorizontalDivider(
-                        color = MaterialTheme.colorScheme.outlineVariant,
-                        thickness = 1.dp
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    content()
-                }
-            }
-        }
-    }
 }
 
 @Composable

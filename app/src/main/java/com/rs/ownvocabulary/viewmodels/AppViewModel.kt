@@ -55,6 +55,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _openAddWordDialog = MutableStateFlow<Boolean>(false)
     val openAddWordDialog: StateFlow<Boolean> = _openAddWordDialog.asStateFlow()
 
+    private val _longPressItem = MutableStateFlow<Word?>(null)
+    val longPressItem: StateFlow<Word?> = _longPressItem.asStateFlow()
+
     private var activeSyncJob: Job? = null
 
     private var activePullSyncJob: Job? = null
@@ -102,6 +105,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 cb(ex.message)
             }
         }
+    }
+
+    fun setLongPressItem(newWord: Word?) {
+        _longPressItem.value = newWord
     }
 
     fun addAiResponse(newWord: AIResponseItem, cb: (errorMessage: String?) -> Unit) {

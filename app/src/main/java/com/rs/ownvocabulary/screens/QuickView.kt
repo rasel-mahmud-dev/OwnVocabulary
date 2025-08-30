@@ -6,6 +6,7 @@ import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -32,6 +33,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -47,18 +49,13 @@ import com.rs.ownvocabulary.viewmodels.AppViewModel
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
 fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) {
-    var isGridView by remember { mutableStateOf(true) }
     val openAddWordDialog by appViewModel.openAddWordDialog.collectAsStateWithLifecycle()
 
-
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val totalWord by appViewModel.totalWord.collectAsStateWithLifecycle()
 
     var favoriteWords by remember { mutableStateOf<List<Word>>(emptyList()) }
     var frequentViewWords by remember { mutableStateOf<List<Word>>(emptyList()) }
 
-    // Animation states
     val fabScale by animateFloatAsState(
         targetValue = if (openAddWordDialog) 0.8f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
@@ -139,8 +136,6 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                 )
             }
 
-            Spacer(modifier = Modifier.height(16.dp))
-
             LazyColumn(
                 modifier = Modifier
                     .fillMaxSize()
@@ -148,6 +143,9 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                 contentPadding = PaddingValues(bottom = 88.dp)
             ) {
 
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
 
                 // Quick Stats Section
 //            item {
@@ -195,6 +193,9 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                                 QuickWordCard(
                                     word = word,
                                     onToggleLove = { toggleLove(word) },
+                                    onItemLongPress = {
+                                        appViewModel.setLongPressItem(word)
+                                    },
                                     onItemClick = {
                                         navHostController.navigate("word_detail/${word.uid}")
                                     }
@@ -206,7 +207,6 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                     }
                 }
 
-                // Favorites Section
                 if (favoriteWords.isNotEmpty()) {
                     item {
                         SectionHeader(
@@ -226,6 +226,9 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                                 QuickWordCard(
                                     word = word,
                                     onToggleLove = { toggleLove(word) },
+                                    onItemLongPress = {
+                                        appViewModel.setLongPressItem(word)
+                                    },
                                     onItemClick = {
                                         navHostController.navigate("word_detail/${word.uid}")
                                     }
@@ -397,9 +400,79 @@ fun EmptyState(
     }
 }
 
-// Keeping your original QuickWordCard design exactly as is
 @Composable
-fun QuickWordCard(word: Word, onItemClick: () -> Unit, onToggleLove: () -> Unit) {
+fun QuickWordCard(word: Word, onItemClick: () -> Unit, onItemLongPress: ()-> Unit, onToggleLove: () -> Unit) {
+    var isFavorite by remember(word.isFavorite) { mutableStateOf(word.isFavorite) }
+
+    val cardColors = when (word.proficiencyLevel) {
+        "Beginner" -> listOf(Color(0xFF4FACFE), Color(0xFF00F2FE))
+        "Intermediate" -> listOf(Color(0xFFFB8C00), Color(0xFFFFD54F))
+        "Advanced" -> listOf(Color(0xFF667eea), Color(0xFF764ba2))
+        else -> listOf(Color(0xFF6B73FF), Color(0xFF9B59B6))
+    }
+
+    Box(
+        modifier = Modifier
+            .wrapContentWidth()
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surfaceContainer)
+            .drawBehind {
+                drawLine(
+                    color = cardColors.first(),
+                    end = androidx.compose.ui.geometry.Offset(0f, 0f),
+                    start = androidx.compose.ui.geometry.Offset(size.width, 0f),
+                    strokeWidth = 4.dp.toPx()
+                )
+            }
+            .pointerInput(Unit) {
+                detectTapGestures(
+                    onTap = { onItemClick() },
+                    onLongPress = {
+                        onItemLongPress()
+                    }
+                )
+            }
+
+    ) {
+
+        Row(
+            modifier = Modifier
+                .wrapContentWidth()
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(0.dp)
+        ) {
+
+            Text(
+                text = word.word,
+                fontSize = 12.sp,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurface,
+                maxLines = 1,
+                overflow = TextOverflow.Visible
+            )
+
+            Box(
+                modifier = Modifier
+                    .size(20.dp)
+                    .clip(RoundedCornerShape(50.dp))
+                    .clickable { onToggleLove() },
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
+                    contentDescription = "Favorite",
+                    tint = if (isFavorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(12.dp)
+                )
+            }
+        }
+    }
+}
+
+
+@Composable
+fun QuickWordListCard(word: Word, onItemClick: () -> Unit, onToggleLove: () -> Unit) {
     var isFavorite by remember(word.isFavorite) { mutableStateOf(word.isFavorite) }
 
     val cardColors = when (word.proficiencyLevel) {
@@ -432,23 +505,42 @@ fun QuickWordCard(word: Word, onItemClick: () -> Unit, onToggleLove: () -> Unit)
                 .wrapContentWidth()
                 .padding(horizontal = 12.dp, vertical = 8.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
+            // Column for word and meaning
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = word.word,
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis
+                )
 
-            Text(
-                text = word.word,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Visible
-            )
+                if (!word.shortMeaning.isNullOrEmpty()) {
+                    Text(
+                        text = word.shortMeaning,
+                        fontSize = 10.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }
 
+            // Favorite icon
             Box(
                 modifier = Modifier
                     .size(20.dp)
                     .clip(RoundedCornerShape(50.dp))
-                    .clickable { onToggleLove() },
+                    .clickable {
+                        isFavorite = !isFavorite
+                        onToggleLove()
+                    },
                 contentAlignment = Alignment.Center
             ) {
                 Icon(

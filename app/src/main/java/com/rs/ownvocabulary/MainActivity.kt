@@ -22,6 +22,11 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         SyncManager.initialize(application)
 
+        TTSManager.initialize(this) { success ->
+            if (success) {
+            }
+        }
+
         enableEdgeToEdge()
         setContent {
             val application = applicationContext as Application
@@ -42,6 +47,11 @@ class MainActivity : ComponentActivity() {
                 }
             }
         }
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        TTSManager.shutdown()
     }
 }
 

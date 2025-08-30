@@ -25,6 +25,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.rs.ownvocabulary.layouts.LayoutWithCreateWord
 import com.rs.ownvocabulary.layouts.MainLayout
+import com.rs.ownvocabulary.layouts.QuickWordViewLayout
 import com.rs.ownvocabulary.screens.AnalyticsScreen
 import com.rs.ownvocabulary.screens.ProfileScreen
 import com.rs.ownvocabulary.screens.QuickView
@@ -89,13 +90,15 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
         ) {
 
             composable("home") {
-                LayoutWithCreateWord(appViewModel) {
-                    MainLayout(
-                        navController = navController,
-                        selectedItem = selectedItem,
-                        setSelectedItem = { selectedItem = it }
-                    ) {
-                        QuickView(navController, appViewModel)
+                QuickWordViewLayout(appViewModel) {
+                    LayoutWithCreateWord(appViewModel) {
+                        MainLayout(
+                            navController = navController,
+                            selectedItem = selectedItem,
+                            setSelectedItem = { selectedItem = it }
+                        ) {
+                            QuickView(navController, appViewModel)
+                        }
                     }
                 }
             }

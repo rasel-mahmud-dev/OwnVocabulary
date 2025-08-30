@@ -319,7 +319,8 @@ fun WordsContent(
                     QuickWordCard(
                         word = word,
                         onToggleLove = { onToggleLove(word) },
-                        onItemClick = { onWordClick(word) }
+                        onItemClick = { onWordClick(word) },
+                        onItemLongPress = {},
                     )
                 }
             }
@@ -331,7 +332,7 @@ fun WordsContent(
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 items(words, key = { it.uid }) { word ->
-                    QuickWordCard(
+                    QuickWordListCard(
                         word = word,
                         onToggleLove = { onToggleLove(word) },
                         onItemClick = { onWordClick(word) }
