@@ -37,6 +37,7 @@ import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.rs.ownvocabulary.ShareActivity
 import com.rs.ownvocabulary.composeable.AddWordDialogShare
+import com.rs.ownvocabulary.composeable.TopBar
 import com.rs.ownvocabulary.database.SortOrder
 import com.rs.ownvocabulary.database.SyncStatus
 import com.rs.ownvocabulary.database.Word
@@ -95,121 +96,60 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
         }
     }
 
-    Box(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-    ) {
-        // Animated FAB
-        FloatingActionButton(
-            onClick = { appViewModel.setAddWordDialog(true) },
-            modifier = Modifier
-                .align(Alignment.BottomEnd)
-                .padding(16.dp)
-                .size(56.dp)
-                .scale(fabScale)
-                .zIndex(1f),
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = MaterialTheme.colorScheme.onPrimary,
-            elevation = FloatingActionButtonDefaults.elevation(
-                defaultElevation = 8.dp,
-                pressedElevation = 12.dp
-            )
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = "Add Word",
-                modifier = Modifier.size(24.dp)
+
+    Scaffold(
+        modifier = Modifier.fillMaxSize(),
+        topBar = {
+            TopBar(
+                title = "Quick View",
+                disableBack = true,
+                onBackClick = { navHostController.popBackStack() },
+                right = {},
+                subTitle = "Fast browse mode",
             )
         }
+    ) { innerPadding ->
 
-        LazyColumn(
+        Box(
             modifier = Modifier
+                .padding(innerPadding)
                 .fillMaxSize()
-                .padding(horizontal = 20.dp),
-            contentPadding = PaddingValues(bottom = 88.dp)
+                .background(MaterialTheme.colorScheme.background)
         ) {
-
-            item {
-                Spacer(modifier = Modifier.height(12.dp))
-
-                // Enhanced Header
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
-                ) {
-                    Column(modifier = Modifier.weight(1f)) {
-                        Text(
-                            text = "Quick View",
-                            style = MaterialTheme.typography.headlineMedium,
-                            color = MaterialTheme.colorScheme.onBackground,
-                            fontWeight = FontWeight.Bold
-                        )
-
-                        Spacer(modifier = Modifier.height(8.dp))
-
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Surface(
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f),
-                                modifier = Modifier.padding(0.dp)
-                            ) {
-                                Text(
-                                    text = "$totalWord words",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                    fontWeight = FontWeight.SemiBold,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
-                            }
-
-                            Text(
-                                text = "• Fast browse mode",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-
-                    Spacer(modifier = Modifier.width(16.dp))
-
-                    // Enhanced Toggle Button
-                    Surface(
-                        onClick = { isGridView = !isGridView },
-                        shape = RoundedCornerShape(16.dp),
-                        color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                        shadowElevation = 2.dp,
-                        modifier = Modifier.animateContentSize()
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Icon(
-                                imageVector = if (isGridView) Icons.Default.GridView else Icons.AutoMirrored.Filled.ViewList,
-                                contentDescription = "Toggle View",
-                                tint = MaterialTheme.colorScheme.primary,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Text(
-                                text = if (isGridView) "Grid" else "List",
-                                fontSize = 14.sp,
-                                fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-                }
-
-                Spacer(modifier = Modifier.height(32.dp))
+            // Animated FAB
+            FloatingActionButton(
+                onClick = { appViewModel.setAddWordDialog(true) },
+                modifier = Modifier
+                    .align(Alignment.BottomEnd)
+                    .padding(16.dp)
+                    .size(56.dp)
+                    .scale(fabScale)
+                    .zIndex(1f),
+                containerColor = MaterialTheme.colorScheme.primary,
+                contentColor = MaterialTheme.colorScheme.onPrimary,
+                elevation = FloatingActionButtonDefaults.elevation(
+                    defaultElevation = 8.dp,
+                    pressedElevation = 12.dp
+                )
+            ) {
+                Icon(
+                    imageVector = Icons.Default.Add,
+                    contentDescription = "Add Word",
+                    modifier = Modifier.size(24.dp)
+                )
             }
 
-            // Quick Stats Section
+            Spacer(modifier = Modifier.height(16.dp))
+
+            LazyColumn(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(horizontal = 20.dp),
+                contentPadding = PaddingValues(bottom = 88.dp)
+            ) {
+
+
+                // Quick Stats Section
 //            item {
 //                Row(
 //                    modifier = Modifier
@@ -235,73 +175,74 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
 //                }
 //            }
 
-            // Frequent Views Section
-            if (frequentViewWords.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Frequently Viewed",
-                        subtitle = "${frequentViewWords.size} words",
-                        icon = Icons.Default.TrendingUp,
-                        iconTint = Color(0xFF4CAF50)
-                    )
+                // Frequent Views Section
+                if (frequentViewWords.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = "Frequently Viewed",
+                            subtitle = "${frequentViewWords.size} words",
+                            icon = Icons.Default.TrendingUp,
+                            iconTint = Color(0xFF4CAF50)
+                        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        frequentViewWords.forEach { word ->
-                            QuickWordCard(
-                                word = word,
-                                onToggleLove = { toggleLove(word) },
-                                onItemClick = {
-                                    navHostController.navigate("word_detail/${word.uid}")
-                                }
-                            )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            frequentViewWords.forEach { word ->
+                                QuickWordCard(
+                                    word = word,
+                                    onToggleLove = { toggleLove(word) },
+                                    onItemClick = {
+                                        navHostController.navigate("word_detail/${word.uid}")
+                                    }
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.height(32.dp))
                     }
-
-                    Spacer(modifier = Modifier.height(32.dp))
                 }
-            }
 
-            // Favorites Section
-            if (favoriteWords.isNotEmpty()) {
-                item {
-                    SectionHeader(
-                        title = "Favorites",
-                        subtitle = "${favoriteWords.size} words",
-                        icon = Icons.Default.Favorite,
-                        iconTint = Color(0xFFE91E63)
-                    )
+                // Favorites Section
+                if (favoriteWords.isNotEmpty()) {
+                    item {
+                        SectionHeader(
+                            title = "Favorites",
+                            subtitle = "${favoriteWords.size} words",
+                            icon = Icons.Default.Favorite,
+                            iconTint = Color(0xFFE91E63)
+                        )
 
-                    Spacer(modifier = Modifier.height(16.dp))
+                        Spacer(modifier = Modifier.height(16.dp))
 
-                    FlowRow(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        favoriteWords.forEach { word ->
-                            QuickWordCard(
-                                word = word,
-                                onToggleLove = { toggleLove(word) },
-                                onItemClick = {
-                                    navHostController.navigate("word_detail/${word.uid}")
-                                }
-                            )
+                        FlowRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            favoriteWords.forEach { word ->
+                                QuickWordCard(
+                                    word = word,
+                                    onToggleLove = { toggleLove(word) },
+                                    onItemClick = {
+                                        navHostController.navigate("word_detail/${word.uid}")
+                                    }
+                                )
+                            }
                         }
+
+                        Spacer(modifier = Modifier.height(24.dp))
                     }
-
-                    Spacer(modifier = Modifier.height(24.dp))
                 }
-            }
 
-            if (favoriteWords.isEmpty() && frequentViewWords.isEmpty()) {
-                item {
-                    EmptyState(
-                        onAddWordClick = { appViewModel.setAddWordDialog(true) }
-                    )
+                if (favoriteWords.isEmpty() && frequentViewWords.isEmpty()) {
+                    item {
+                        EmptyState(
+                            onAddWordClick = { appViewModel.setAddWordDialog(true) }
+                        )
+                    }
                 }
             }
         }

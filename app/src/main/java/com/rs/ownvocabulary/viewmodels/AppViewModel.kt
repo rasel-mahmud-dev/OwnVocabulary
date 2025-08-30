@@ -18,19 +18,26 @@ import kotlinx.coroutines.launch
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.lifecycle.application
+import com.rs.ownvocabulary.database.AIResponseDatabase
+import com.rs.ownvocabulary.database.AIResponseItem
 import com.rs.ownvocabulary.database.SortOrder
 import com.rs.ownvocabulary.sync.PushWordJob
+import com.rs.ownvocabulary.utils.DeviceId
 import kotlinx.coroutines.delay
 
+data class CurrentUser(
+    val userId: String,
+    val username: String
+)
 
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     val db = WordDatabase.getInstance(application)
+    val aiResponseDb = AIResponseDatabase.getInstance(application)
+
+    private val _currentUser = MutableStateFlow<CurrentUser?>(null)
+    val currentUser: StateFlow<CurrentUser?> = _currentUser.asStateFlow()
 
     sealed class Event {
         data class ShowToast(val message: String) : Event()
@@ -97,6 +104,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addAiResponse(newWord: AIResponseItem, cb: (errorMessage: String?) -> Unit) {
+        viewModelScope.launch {
+            try {
+                aiResponseDb.insert(newWord)
+                cb(null)
+            } catch (ex: Exception) {
+                println(ex?.message)
+                cb(ex.message)
+            }
+        }
+    }
+
+    fun loadAiGeneratedResponse(word: String, cb: (items: List<AIResponseItem>) -> Unit) {
+        viewModelScope.launch {
+            try {
+                aiResponseDb.getAllByInput(word) {
+                    cb(it)
+                }
+
+            } catch (ex: Exception) {
+                println(ex?.message)
+            }
+        }
+    }
+
     fun updatePartial(wordPartial: WordPartial, cb: (errorMessage: String?) -> Unit) {
         viewModelScope.launch {
             try {
@@ -124,6 +156,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     init {
+
+        _currentUser.value = CurrentUser(DeviceId.getDeviceId(application), "TestUser")
 
         println("has nwet ${isNetworkAvailable(application)}")
 

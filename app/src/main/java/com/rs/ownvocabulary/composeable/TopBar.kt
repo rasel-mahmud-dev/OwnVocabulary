@@ -1,5 +1,6 @@
 package com.rs.ownvocabulary.composeable
 
+import android.annotation.SuppressLint
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,6 +36,7 @@ import androidx.compose.ui.unit.dp
 fun TopBar(
     title: String,
     subTitle: String?,
+    disableBack: Boolean = false,
     onBackClick: () -> Unit,
     right: @Composable () -> Unit
 ) {
@@ -51,11 +53,11 @@ fun TopBar(
                     Brush.verticalGradient(
                         colors = listOf(
                             MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                            MaterialTheme.colorScheme.secondary
                         )
                     )
                 )
-                .padding(horizontal = 12.dp)
+                .padding(horizontal = 16.dp)
         ) {
             Row(
                 modifier = Modifier
@@ -63,23 +65,26 @@ fun TopBar(
                     .padding(top = 24.dp),
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                IconButton(
-                    onClick = onBackClick,
-                    modifier = Modifier
-                        .background(
-                            Color.White.copy(alpha = 0.2f),
-                            CircleShape
-                        ).size(38.dp)
-                ) {
-                    Icon(
-                        modifier = Modifier.size(24.dp),
-                        imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Color.White,
-                    )
-                }
 
-                Spacer(modifier = Modifier.width(12.dp))
+                if(!disableBack) {
+                    IconButton(
+                        onClick = onBackClick,
+                        modifier = Modifier
+                            .background(
+                                Color.White.copy(alpha = 0.2f),
+                                CircleShape
+                            ).size(38.dp)
+                    ) {
+                        Icon(
+                            modifier = Modifier.size(24.dp),
+                            imageVector = Icons.AutoMirrored.Outlined.ArrowBack,
+                            contentDescription = "Back",
+                            tint = Color.White,
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
 
                 Column(
                     modifier = Modifier.weight(1f)

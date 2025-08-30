@@ -29,8 +29,10 @@ data class Word(
     val updatedAt: Long = System.currentTimeMillis(),
     val syncStatus: SyncStatus = SyncStatus.PENDING,
     val retryCount: Int = 0,
-    val lastSyncAttempt: Long? = null
+    val lastSyncAttempt: Long? = null,
 )
+
+
 
 data class WordPartial(
     val id: Long = 0,
@@ -199,6 +201,64 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
             }
             cursor.close()
             callback(count)
+        }
+    }
+    fun totalFavWordCount(callback: (Int) -> Unit) {
+        executor.execute {
+            val db = readableDatabase
+            val query = "SELECT COUNT(*) FROM $TABLE_WORDS WHERE $COLUMN_SYNC_STATUS != ? AND $COLUMN_IS_FAVORITE = 1"
+            val cursor = db.rawQuery(query, arrayOf(SyncStatus.DELETED.name))
+            var count = 0
+            if (cursor.moveToFirst()) {
+                count = cursor.getInt(0)
+            }
+            cursor.close()
+            callback(count)
+        }
+    }
+
+
+    fun getVisitCounts(callback: (todayCount: Int, weekCount: Int) -> Unit) {
+        executor.execute {
+            val db = readableDatabase
+
+            // Calculate time boundaries
+            val calendar = Calendar.getInstance().apply {
+                set(Calendar.HOUR_OF_DAY, 0)
+                set(Calendar.MINUTE, 0)
+                set(Calendar.SECOND, 0)
+                set(Calendar.MILLISECOND, 0)
+            }
+            val todayStartTime = calendar.timeInMillis
+
+            calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
+            val weekStartTime = calendar.timeInMillis
+
+            // Single query using CASE statements
+            val query = """
+            SELECT 
+                SUM(CASE WHEN $COLUMN_LAST_VIEWED >= ? THEN 1 ELSE 0 END) as today_count,
+                SUM(CASE WHEN $COLUMN_LAST_VIEWED >= ? THEN 1 ELSE 0 END) as week_count
+            FROM $TABLE_WORDS 
+            WHERE $COLUMN_SYNC_STATUS != ?
+        """.trimIndent()
+
+            var todayCount = 0
+            var weekCount = 0
+
+            val cursor = db.rawQuery(query, arrayOf(
+                todayStartTime.toString(),
+                weekStartTime.toString(),
+                SyncStatus.DELETED.name
+            ))
+
+            if (cursor.moveToFirst()) {
+                todayCount = cursor.getInt(0)
+                weekCount = cursor.getInt(1)
+            }
+            cursor.close()
+
+            callback(todayCount, weekCount)
         }
     }
 

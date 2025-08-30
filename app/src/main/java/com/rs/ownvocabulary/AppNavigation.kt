@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.ExperimentalMaterial3Api
 
+
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -24,7 +25,10 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.rs.ownvocabulary.layouts.LayoutWithCreateWord
 import com.rs.ownvocabulary.layouts.MainLayout
+import com.rs.ownvocabulary.screens.AnalyticsScreen
+import com.rs.ownvocabulary.screens.ProfileScreen
 import com.rs.ownvocabulary.screens.QuickView
+import com.rs.ownvocabulary.screens.TestPage
 import com.rs.ownvocabulary.screens.Vocabulary
 import com.rs.ownvocabulary.screens.WordPractice
 import com.rs.ownvocabulary.viewmodels.AppViewModel
@@ -79,26 +83,44 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = "dictionary"
-//            startDestination = "word_detail/e15f260f-48da-4a89-ad09-60605d329e29"
+            startDestination = "home"
+//            startDestination = "word_detail/fe291334-a8b8-4b9a-9aee-863f7df32002"
 //                startDestination = startDestination // "home",
         ) {
 
             composable("home") {
-
-                LayoutWithCreateWord(appViewModel){
+                LayoutWithCreateWord(appViewModel) {
                     MainLayout(
                         navController = navController,
-                        selectedItem=selectedItem,
-                        setSelectedItem = {selectedItem = it}
+                        selectedItem = selectedItem,
+                        setSelectedItem = { selectedItem = it }
                     ) {
                         QuickView(navController, appViewModel)
                     }
                 }
             }
 
+            composable("analytics") {
+                MainLayout(
+                    navController = navController,
+                    selectedItem = selectedItem,
+                    setSelectedItem = { selectedItem = it }
+                ) {
+                    AnalyticsScreen(navController, appViewModel)
+                }
+            }
+            composable("profile") {
+                MainLayout(
+                    navController = navController,
+                    selectedItem = selectedItem,
+                    setSelectedItem = { selectedItem = it }
+                ) {
+                    ProfileScreen(navController, appViewModel)
+                }
+            }
+
             composable("dictionary") {
-                LayoutWithCreateWord(appViewModel){
+                LayoutWithCreateWord(appViewModel) {
                     MainLayout(
                         navController = navController,
                         selectedItem = selectedItem,
@@ -114,50 +136,6 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
                 WordPractice(navController, uid, appViewModel)
             }
 
-            composable("analytics") {
-                MainLayout(
-                    navController = navController,
-                    selectedItem=selectedItem,
-                    setSelectedItem = {selectedItem = it}
-                ) {
-                    QuickView(navController, appViewModel)
-                }
-            }
-
-            composable("profile") {
-                MainLayout(
-                    navController = navController,
-                    selectedItem=selectedItem,
-                    setSelectedItem = { selectedItem = it}
-                ) {
-                    QuickView(navController, appViewModel)
-                }
-            }
-
-//                composable("new-diary") {
-//                    val scrapedData = remember(initialIntent) {
-//                        if (initialIntent.hasExtra("route") &&
-//                            initialIntent.getStringExtra("route") == "new-diary"
-//                        ) {
-//                            ScrapedData(
-//                                content = initialIntent.getStringExtra("content") ?: "",
-//                                cover = initialIntent.getStringExtra("cover") ?: "",
-//                            )
-//                        } else null
-//                    }
-//
-//                    CreateDiary(navController, "", scrapedData)
-//                }
-//
-//                composable("update-diary/{uid}") { backStackEntry ->
-//                    val uid = backStackEntry.arguments?.getString("uid") ?: ""
-//                    CreateDiary(navController, uid, null)
-//                }
-//
-//                composable("detail/{uid}") { backStackEntry ->
-//                    val uid = backStackEntry.arguments?.getString("uid") ?: ""
-//                    DetailNote(navController, uid, viewModel)
-//                }
         }
 
     }

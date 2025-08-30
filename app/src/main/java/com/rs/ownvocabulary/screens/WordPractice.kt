@@ -1,5 +1,6 @@
 package com.rs.ownvocabulary.screens
 
+import android.speech.tts.TextToSpeech
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
@@ -20,16 +21,19 @@ import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.rs.ownvocabulary.composeable.AddAnExample
 import com.rs.ownvocabulary.composeable.AddWordDialogShare
+import com.rs.ownvocabulary.composeable.ExcersizeSentance
 import com.rs.ownvocabulary.composeable.TopBar
 import com.rs.ownvocabulary.database.SyncStatus
 import com.rs.ownvocabulary.database.Word
 import com.rs.ownvocabulary.database.WordPartial
+import com.rs.ownvocabulary.utils.DateFormatter
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
 
@@ -55,6 +59,7 @@ fun WordPractice(navHostController: NavHostController, uid: String, appViewModel
     }
 
     LaunchedEffect(uid) {
+        println("uid $uid")
         if (uid.isNotEmpty()) {
             loadDetail(uid)
         }
@@ -185,62 +190,39 @@ private fun WordDetailContent(
 
         // Word Statistics
         item {
-            WordStatsCard(word = word)
+//            WordStatsCard(word = word)
         }
 
         // Short Meaning Section
-        if (word.shortMeaning.isNotEmpty()) {
-            item {
-                DefinitionCard(
-                    title = "Definition",
-                    content = word.shortMeaning,
-                    icon = Icons.Outlined.Description
-                )
-            }
-        }
+//        if (word.shortMeaning.isNotEmpty()) {
+//            item {
+//                DefinitionCard(
+//                    title = "Definition",
+//                    content = word.shortMeaning,
+//                    icon = Icons.Outlined.Description
+//                )
+//            }
+//        }
 
-        // Detailed Description
         if (word.details.isNotEmpty()) {
             item {
                 DefinitionCard(
-                    title = "Detailed Description",
+                    title = "Details",
                     content = word.details,
                     icon = Icons.Outlined.Info,
-                    containerColor = MaterialTheme.colorScheme.tertiaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+                    contentColor = MaterialTheme.colorScheme.onBackground
                 )
             }
         }
 
         item {
-            if (word.examples.isNotEmpty()) {
-                ExpandableSection(
-                    refetchWordDetail = refetchWordDetail,
-                    uid = word.uid,
-                    appViewModel = appViewModel,
-                    title = "Examples",
-                    examples = word.examples,
-                    icon = Icons.Outlined.FormatQuote,
-                    isExpanded = showExamples,
-                    onToggle = onToggleExamples,
-                    content = {
-                        ExamplesContent(examples = word.examples)
-                    }
-                )
-
-            } else {
-                ExpandableSection(
-                    refetchWordDetail = refetchWordDetail,
-                    uid = word.uid,
-                    appViewModel = appViewModel,
-                    title = "Examples",
-                    icon = Icons.Outlined.FormatQuote,
-                    isExpanded = showExamples,
-                    onToggle = onToggleExamples,
-                    examples = "",
-                    content = {}
-                )
-            }
+            ExcersizeSentance(
+                appViewModel = appViewModel,
+                title = "Generate from AI",
+                word = word,
+                icon = Icons.Outlined.Hub,
+                contentColor = MaterialTheme.colorScheme.onTertiaryContainer
+            )
         }
 
         item {
@@ -258,6 +240,22 @@ private fun WordHeaderCard(
     setEditItem: () -> Unit
 ) {
 
+    val context = LocalContext.current
+
+    val tts = remember {
+        TextToSpeech(context) {}
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            tts.stop()
+            tts.shutdown()
+        }
+    }
+
+    fun handlePlaySound(word: String) {
+        tts.speak(word, TextToSpeech.QUEUE_FLUSH, null, null)
+    }
 
     val cardColors = when (word.proficiencyLevel) {
         "Beginner" -> listOf(Color(0xFF4FACFE), Color(0xFF00F2FE))
@@ -304,12 +302,35 @@ private fun WordHeaderCard(
                         textAlign = TextAlign.Start
                     )
 
-                    if (word.type.isNotEmpty()) {
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        if (word.type.isNotEmpty()) {
+                            Text(
+                                text = "/${word.type}/",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
+                            )
+                        }
+                        IconButton(onClick = {
+                            handlePlaySound(word.word)
+                        }, modifier = Modifier.size(30.dp)) {
+                            Icon(
+                                imageVector = Icons.Outlined.PlayCircle,
+                                contentDescription = "infod",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(18.dp)
+                            )
+                        }
+                    }
+                    if (word.shortMeaning.isNotEmpty()) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = "/${word.type}/",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            fontWeight = FontWeight.Medium
+                            text = word.shortMeaning,
+                            style = MaterialTheme.typography.bodyLarge,
+                            lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
                         )
                     }
                 }
@@ -434,18 +455,9 @@ private fun WordStatsCard(word: Word) {
             StatItem(
                 icon = Icons.Outlined.Schedule,
                 label = "Last viewed",
-                value = if (word.lastVisited == 0L) "Today" else "${word.lastVisited}d ago"
-            )
-
-            VerticalDivider(
-                modifier = Modifier.height(56.dp),
-                color = MaterialTheme.colorScheme.outlineVariant
-            )
-
-            StatItem(
-                icon = Icons.Outlined.DateRange,
-                label = "Added",
-                value = word.createdAt.toString()
+                value = if (word.lastVisited == 0L) "Today" else DateFormatter.formatToRelativeTime(
+                    word.createdAt
+                )
             )
         }
     }
@@ -486,13 +498,9 @@ private fun DefinitionCard(
     title: String,
     content: String,
     icon: ImageVector,
-    containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     contentColor: Color = MaterialTheme.colorScheme.onSurface
 ) {
-    Card(
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(containerColor = containerColor)
-    ) {
+
         Column(
             modifier = Modifier.padding(20.dp)
         ) {
@@ -523,7 +531,7 @@ private fun DefinitionCard(
                 lineHeight = MaterialTheme.typography.bodyLarge.lineHeight
             )
         }
-    }
+
 }
 
 @Composable
@@ -626,11 +634,8 @@ private fun ExpandableSection(
                             .graphicsLayer(rotationZ = rotationAngle)
                     )
                 }
-
-
             }
 
-            // Content
             AnimatedVisibility(
                 visible = isExpanded,
                 enter = fadeIn(animationSpec = tween(300)) + expandVertically(

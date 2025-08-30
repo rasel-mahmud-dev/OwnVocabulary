@@ -182,26 +182,26 @@ fun AddWordDialogShare(
                     )
                 )
 
-                Spacer(modifier = Modifier.height(16.dp))
-
-                OutlinedTextField(
-                    value = examples,
-                    onValueChange = { examples = it },
-                    label = { Text("Examples") },
-                    placeholder = { Text("Usage examples...") },
-                    modifier = Modifier.fillMaxWidth(),
-                    minLines = 2,
-                    maxLines = 4,
-                    keyboardOptions = KeyboardOptions(
-                        capitalization = KeyboardCapitalization.Sentences,
-                        imeAction = ImeAction.Default
-                    ),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = OutlinedTextFieldDefaults.colors(
-                        focusedBorderColor = MaterialTheme.colorScheme.primary,
-                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
-                    )
-                )
+//                Spacer(modifier = Modifier.height(16.dp))
+//
+//                OutlinedTextField(
+//                    value = examples,
+//                    onValueChange = { examples = it },
+//                    label = { Text("Examples") },
+//                    placeholder = { Text("Usage examples...") },
+//                    modifier = Modifier.fillMaxWidth(),
+//                    minLines = 2,
+//                    maxLines = 4,
+//                    keyboardOptions = KeyboardOptions(
+//                        capitalization = KeyboardCapitalization.Sentences,
+//                        imeAction = ImeAction.Default
+//                    ),
+//                    shape = RoundedCornerShape(16.dp),
+//                    colors = OutlinedTextFieldDefaults.colors(
+//                        focusedBorderColor = MaterialTheme.colorScheme.primary,
+//                        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+//                    )
+//                )
 
                 Spacer(modifier = Modifier.height(20.dp))
 
