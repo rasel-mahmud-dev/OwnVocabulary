@@ -13,10 +13,9 @@ import kotlin.apply
 
 class GeminiApiClient {
     private val client = OkHttpClient()
-    private val apiKeys = listOf(
-        
-    )
-    private val apiKey = apiKeys.random()
+
+    private val apiKeys = BuildConfig.GEMINI_API_KEYS.split(",")
+
     private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
 
     suspend fun handleGenerate(word: String, allGeneratedSentences: String, count: Int): List<String> {
@@ -63,6 +62,7 @@ class GeminiApiClient {
     }
 
     suspend fun getResponse(prompt: String): String = withContext(Dispatchers.IO) {
+        val apiKey = apiKeys.random()
         val requestBody = JSONObject().apply {
             put("contents", JSONArray().apply {
                 put(JSONObject().apply {
@@ -75,6 +75,8 @@ class GeminiApiClient {
             })
         }
 
+        println("api key $apiKey .")
+
         val request = Request.Builder()
             .url("$baseUrl?key=$apiKey")
             .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
@@ -83,6 +85,8 @@ class GeminiApiClient {
         val response = client.newCall(request).execute()
 
         if (!response.isSuccessful) {
+            println(response.message)
+            println(response.body.toString())
             throw IOException("API failed: ${response.code}")
         }
 

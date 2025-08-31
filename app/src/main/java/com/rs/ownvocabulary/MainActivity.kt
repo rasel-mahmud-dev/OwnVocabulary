@@ -16,17 +16,15 @@ import com.rs.ownvocabulary.sync.SyncManager
 import com.rs.ownvocabulary.ui.theme.OwnVocabularyTheme
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
+
 class MainActivity : ComponentActivity() {
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         SyncManager.initialize(application)
 
-        TTSManager.initialize(this) { success ->
-            if (success) {
-            }
-        }
-
+        TTSManager.initialize(this)
+        
         enableEdgeToEdge()
         setContent {
             val application = applicationContext as Application

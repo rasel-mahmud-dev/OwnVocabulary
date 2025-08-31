@@ -1,3 +1,6 @@
+import java.io.FileInputStream
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -8,6 +11,13 @@ android {
     namespace = "com.rs.ownvocabulary"
     compileSdk = 35
 
+    val properties = Properties()
+    val localPropertiesFile = rootProject.file("local.properties")
+    if (localPropertiesFile.exists()) {
+        properties.load(FileInputStream(localPropertiesFile))
+    }
+
+
     defaultConfig {
         applicationId = "com.rs.ownvocabulary"
         minSdk = 29
@@ -16,16 +26,22 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+
+        buildConfigField("String", "API_KEY", "\"${properties.getProperty("API_KEY", "")}\"")
+        buildConfigField("String", "API_BASE_URL", "\"${properties.getProperty("API_BASE_URL", "")}\"")
+        buildConfigField("String", "API_SECRET_KEY", "\"${properties.getProperty("API_SECRET_KEY", "")}\"")
+        buildConfigField("String", "GEMINI_API_KEYS", "\"${properties.getProperty("GEMINI_API_KEYS", "")}\"")
     }
 
     buildTypes {
 
         debug {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            buildConfigField("String", "API_KEY", "\"your_debug_api_key\"")
         }
 
         release {
@@ -45,6 +61,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
