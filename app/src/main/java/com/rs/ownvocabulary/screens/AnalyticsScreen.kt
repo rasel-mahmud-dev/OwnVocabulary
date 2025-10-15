@@ -80,8 +80,8 @@ fun AnalyticsScreen(navHostController: NavHostController, appViewModel: AppViewM
                         System.currentTimeMillis() - it.createdAt < 7 * 24 * 60 * 60 * 1000
                     },
                     mostVisitedWords = sortedWords,
-                    recentAIResponses = recentAI,
-                    proficiencyBreakdown = proficiencyMap,
+//                    recentAIResponses = recentAI,
+//                    proficiencyBreakdown = proficiencyMap,
                     favoriteWordsCount = words.count { it.isFavorite }
                 )
                 isLoading = false
@@ -209,7 +209,7 @@ private fun OverviewContent(
 
         // Proficiency Breakdown
         item {
-            ProficiencyBreakdownCard(analyticsData.proficiencyBreakdown)
+//            ProficiencyBreakdownCard(analyticsData.proficiencyBreakdown)
         }
 
         // Top 3 Most Visited Words Preview

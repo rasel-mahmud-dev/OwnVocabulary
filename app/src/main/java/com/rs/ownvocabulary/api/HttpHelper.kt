@@ -1,6 +1,7 @@
 package com.rs.ownvocabulary.api
 
 import com.rs.ownvocabulary.configs.Keys
+import com.rs.ownvocabulary.sync.SyncManager
 import kotlinx.coroutines.*
 import okhttp3.*
 import okhttp3.MediaType.Companion.toMediaTypeOrNull
@@ -13,10 +14,13 @@ data class HttpResponse(val statusCode: Int, val body: String?)
 class HttpHelper private constructor() {
 
     private val client = OkHttpClient.Builder().addInterceptor { chain ->
+        val token = SyncManager.getAuthToken()
+
         val originalRequest = chain.request()
         val modifiedRequest = originalRequest.newBuilder()
             .addHeader("x-secret-key", Keys.SECRET_KEY)
             .addHeader("x-api-key", Keys.API_KEY)
+            .addHeader("Authorization", "Bearer $token")
             .build()
         chain.proceed(modifiedRequest)
     }.build()

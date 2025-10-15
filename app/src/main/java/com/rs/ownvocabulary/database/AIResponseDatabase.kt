@@ -6,7 +6,6 @@ import android.database.Cursor
 import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
-import androidx.compose.animation.scaleOut
 import java.util.concurrent.Executors
 import java.util.*
 
@@ -35,10 +34,8 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
         private const val DATABASE_NAME = "ai_response_db.db"
         private const val DATABASE_VERSION = 2
 
-        // Table name
         private const val TABLE_AI_RESPONSES = "ai_responses"
 
-        // Column names
         private const val COLUMN_ID = "id"
         private const val COLUMN_UID = "uid"
         private const val COLUMN_INPUT = "input"

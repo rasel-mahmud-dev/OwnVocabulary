@@ -35,6 +35,7 @@ fun LayoutWithCreateWord(
 ) {
 
     val openAddWordDialog by appViewModel.openAddWordDialog.collectAsStateWithLifecycle()
+    val currentUser by appViewModel.currentUser.collectAsStateWithLifecycle()
 
     fun handleClose(){
         appViewModel.setAddWordDialog(false)
@@ -42,6 +43,7 @@ fun LayoutWithCreateWord(
 
     Surface {
         AddWordDialogShare(
+            userId = currentUser?.userId,
             incomingWord = "",
             showDialog = openAddWordDialog,
             onDismiss = {  handleClose() },

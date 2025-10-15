@@ -44,19 +44,12 @@ fun TopBar(
         modifier = Modifier
             .fillMaxWidth()
             .height(100.dp),
-        shadowElevation = 8.dp
+        shadowElevation = 8.dp,
+        color =  MaterialTheme.colorScheme.surface
     ) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.secondary
-                        )
-                    )
-                )
                 .padding(horizontal = 16.dp)
         ) {
             Row(
@@ -93,13 +86,14 @@ fun TopBar(
                         text = title,
                         style = MaterialTheme.typography.titleLarge,
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                     if(subTitle != null) {
+                        Spacer(Modifier.height(4.dp))
                         Text(
                             text = subTitle,
                             style = MaterialTheme.typography.bodySmall,
-                            color = Color.White.copy(alpha = 0.8f)
+                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.9f)
                         )
                     }
                 }

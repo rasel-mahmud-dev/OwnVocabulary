@@ -21,3 +21,12 @@ OwnVocabulary is a modern Android vocabulary learning application built with Jet
 🎯 Purpose:
 An educational tool designed for language learners, students, and professionals who want to systematically build their vocabulary with personalized practice sessions and progress tracking.
 The app combines beautiful design with practical learning features to make vocabulary building both effective and enjoyable.
+
+
+### problem
+google sigin work only on release mode not dvelopment
+so,
+
+./gradlew signingReport
+
+hash device fingerprint 

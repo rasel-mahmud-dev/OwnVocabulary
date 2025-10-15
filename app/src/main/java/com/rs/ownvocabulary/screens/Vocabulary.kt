@@ -3,31 +3,31 @@ package com.rs.ownvocabulary.screens
 import android.widget.Toast
 import androidx.compose.animation.*
 import androidx.compose.animation.core.*
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.rs.ownvocabulary.GoogleSignInScreen
+import com.rs.ownvocabulary.composeable.LoginRequired
+import com.rs.ownvocabulary.composeable.QuickWordCard
 import com.rs.ownvocabulary.database.SyncStatus
 import com.rs.ownvocabulary.database.Word
 import com.rs.ownvocabulary.database.WordPartial
@@ -37,116 +37,141 @@ import com.rs.ownvocabulary.composeable.TopBar
 
 @Composable
 fun Vocabulary(navHostController: NavHostController, appViewModel: AppViewModel) {
-    var isGridView by remember { mutableStateOf(true) }
-    var searchQuery by remember { mutableStateOf("") }
-    var showSearch by remember { mutableStateOf(false) }
     val openAddWordDialog by appViewModel.openAddWordDialog.collectAsStateWithLifecycle()
+    val myWords by appViewModel.myWords.collectAsStateWithLifecycle()
+    val totalWordsCount by appViewModel.totalWordsCountOwn.collectAsStateWithLifecycle()
+    val isLoadingMore by appViewModel.isLoadingMoreOwn.collectAsStateWithLifecycle()
+    val hasMoreData by appViewModel.hasMoreDataOwn.collectAsStateWithLifecycle()
+    val searchQuery by appViewModel.searchQueryOwn.collectAsStateWithLifecycle()
+    val sortBy by appViewModel.sortByOwn.collectAsStateWithLifecycle()
+    val currentUser by appViewModel.currentUser.collectAsStateWithLifecycle()
 
+    // Add this to check if user is logged in
+    val isLoggedIn = currentUser?.userId != null
 
+    var showSearchBar by remember { mutableStateOf(false) }
+    var showSortMenu by remember { mutableStateOf(false) }
+
+    val listState = rememberLazyListState()
     val context = LocalContext.current
-    val coroutineScope = rememberCoroutineScope()
-    val totalWord by appViewModel.totalWord.collectAsStateWithLifecycle()
-    val words by appViewModel.words.collectAsStateWithLifecycle()
 
-    val filteredWords = remember(words, searchQuery) {
-        if (searchQuery.isEmpty()) {
-            words
-        } else {
-            words.filter {
-                it.word.contains(searchQuery, ignoreCase = true) ||
-                        it.shortMeaning.contains(searchQuery, ignoreCase = true)
-            }
+    val shouldLoadMore = remember {
+        derivedStateOf {
+            val lastVisibleItem = listState.layoutInfo.visibleItemsInfo.lastOrNull()
+            lastVisibleItem?.index != 0 &&
+                    lastVisibleItem?.index == listState.layoutInfo.totalItemsCount - 1
         }
     }
 
-    // Animation states
+    LaunchedEffect(shouldLoadMore.value) {
+        if (shouldLoadMore.value && hasMoreData && !isLoadingMore && isLoggedIn) {
+            appViewModel.loadCommunityWords(loadMore = true)
+        }
+    }
+
+    LaunchedEffect(isLoggedIn) {
+        if (isLoggedIn) {
+            appViewModel.pullWordFromServer()
+            appViewModel.loadOwnWords()
+        }
+    }
+
     val fabScale by animateFloatAsState(
         targetValue = if (openAddWordDialog) 0.8f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
     )
 
-    // Scroll states for performance
-    val listState = rememberLazyListState()
-    val gridState = rememberLazyGridState()
-
-
     fun toggleLove(word: Word) {
-        appViewModel.updatePartial(
-            WordPartial(
-                uid = word.uid,
-                syncStatus = SyncStatus.PENDING,
-                isFavorite = !word.isFavorite
-            )
-        ) {
+        appViewModel.toggleFavorite(word.uid, word.isFavorite) {
             if (it != null) {
                 Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-                return@updatePartial
+                return@toggleFavorite
             }
-            appViewModel.loadWords()
-            Toast.makeText(context, "Updated", Toast.LENGTH_SHORT).show()
         }
     }
+
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
             TopBar(
-                title = "Vocabulary",
-                disableBack = true,
+                title = "My Words",
+                subTitle = "My personal vocabulary",
                 onBackClick = { navHostController.popBackStack() },
-                right = {
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                            // Search Button
-                            Surface(
-                                onClick = { showSearch = !showSearch },
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                shadowElevation = 1.dp
-                            ) {
-                                Box(
-                                    modifier = Modifier.padding(12.dp),
-                                    contentAlignment = Alignment.Center
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Outlined.Search,
-                                        contentDescription = "Search",
-                                        tint = MaterialTheme.colorScheme.onSurface,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                }
-                            }
+                disableBack = true
+            ) {
+                if (isLoggedIn) {
+                    IconButton(onClick = { showSearchBar = !showSearchBar }) {
+                        Icon(
+                            imageVector = Icons.Default.Search,
+                            contentDescription = "Search words",
+                            tint = if (showSearchBar || searchQuery.isNotEmpty())
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
 
-                            Surface(
-                                onClick = { isGridView = !isGridView },
-                                shape = RoundedCornerShape(12.dp),
-                                color = MaterialTheme.colorScheme.surfaceContainerHighest,
-                                shadowElevation = 1.dp,
-                                modifier = Modifier.animateContentSize()
-                            ) {
-                                Row(
-                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 12.dp),
-                                    verticalAlignment = Alignment.CenterVertically,
-                                    horizontalArrangement = Arrangement.spacedBy(6.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = if (isGridView) Icons.Default.GridView else Icons.AutoMirrored.Filled.ViewList,
-                                        contentDescription = "Toggle View",
-                                        tint = MaterialTheme.colorScheme.primary,
-                                        modifier = Modifier.size(20.dp)
-                                    )
-                                    Text(
-                                        text = if (isGridView) "Grid" else "List",
-                                        fontSize = 13.sp,
-                                        fontWeight = FontWeight.SemiBold,
-                                        color = MaterialTheme.colorScheme.onSurface
-                                    )
-                                }
-                            }
+                    Box {
+                        IconButton(onClick = { showSortMenu = true }) {
+                            Icon(
+                                imageVector = Icons.Default.Sort,
+                                contentDescription = "Sort words",
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
                         }
-                },
-                subTitle = "$totalWord words",
-            )
+
+                        DropdownMenu(
+                            expanded = showSortMenu,
+                            onDismissRequest = { showSortMenu = false }
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Newest First") },
+                                onClick = {
+                                    appViewModel.updateSortByOwn("newest")
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.NewReleases, null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Oldest First") },
+                                onClick = {
+                                    appViewModel.updateSortByOwn("oldest")
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.History, null)
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Alphabetical") },
+                                onClick = {
+                                    appViewModel.updateSortByOwn("alphabetical")
+                                    showSortMenu = false
+                                },
+                                leadingIcon = {
+                                    Icon(Icons.Default.SortByAlpha, null)
+                                }
+                            )
+                        }
+                    }
+
+                    IconButton(
+                        onClick = {
+                            appViewModel.resetPaginationOwn()
+                            appViewModel.pullWordFromServer()
+                            appViewModel.loadOwnWords()
+                        }
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Refresh,
+                            contentDescription = "Refresh words",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
         }
     ) { innerPadding ->
         Box(
@@ -155,322 +180,191 @@ fun Vocabulary(navHostController: NavHostController, appViewModel: AppViewModel)
                 .fillMaxSize()
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Animated FAB
-            FloatingActionButton(
-                onClick = { appViewModel.setAddWordDialog(true) },
-                modifier = Modifier
-                    .align(Alignment.BottomEnd)
-                    .padding(16.dp)
-                    .size(56.dp)
-                    .scale(fabScale)
-                    .zIndex(1f),
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = MaterialTheme.colorScheme.onPrimary,
-                elevation = FloatingActionButtonDefaults.elevation(
-                    defaultElevation = 8.dp,
-                    pressedElevation = 12.dp
-                )
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = "Add Word",
-                    modifier = Modifier.size(24.dp)
-                )
-            }
+            if (!isLoggedIn) {
 
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(horizontal = 20.dp)
-            ) {
-                Spacer(modifier = Modifier.height(12.dp))
 
-                AnimatedContent(
-                    targetState = showSearch,
-                    transitionSpec = {
-                        (slideInVertically { -it } + fadeIn()).togetherWith(slideOutVertically { -it } + fadeOut())
-                    }
-                ) { isSearching ->
-                    if (isSearching) {
-                        SearchBar(
-                            query = searchQuery,
-                            onQueryChange = { searchQuery = it },
-                            onSearchToggle = { showSearch = false }
+                LoginRequired(navHostController, appViewModel)
+
+
+            } else {
+                // Logged in state - Show vocabulary
+                if (isLoggedIn) {
+                    FloatingActionButton(
+                        onClick = { appViewModel.setAddWordDialog(true) },
+                        modifier = Modifier
+                            .align(Alignment.BottomEnd)
+                            .padding(16.dp)
+                            .size(56.dp)
+                            .scale(fabScale)
+                            .zIndex(1f),
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary,
+                        elevation = FloatingActionButtonDefaults.elevation(
+                            defaultElevation = 8.dp,
+                            pressedElevation = 12.dp
+                        )
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.Add,
+                            contentDescription = "Add Word",
+                            modifier = Modifier.size(24.dp)
                         )
                     }
                 }
 
-                Spacer(modifier = Modifier.height(24.dp))
-
-                if (searchQuery.isNotEmpty()) {
-                    ResultsSummary(
-                        query = searchQuery,
-                        totalResults = filteredWords.size,
-                        totalWords = words.size,
-                        onClearSearch = {
-                            searchQuery = ""
-                            showSearch = false
+                LazyColumn(
+                    state = listState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(horizontal = 20.dp, vertical = 16.dp)
+                ) {
+                    item {
+                        if (showSearchBar) {
+                            Column(Modifier.padding(top = 0.dp, bottom = 20.dp)) {
+                                SearchBar(
+                                    query = searchQuery,
+                                    onQueryChange = { appViewModel.updateSearchQueryOwn(it) },
+                                    onSearchToggle = {
+                                        appViewModel.clearSearchOwn()
+                                        showSearchBar = false
+                                    }
+                                )
+                            }
                         }
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                }
-
-                if (filteredWords.isEmpty()) {
-                    if (searchQuery.isNotEmpty()) {
-                        SearchEmptyState(
-                            query = searchQuery,
-                            onClearSearch = {
-                                searchQuery = ""
-                                showSearch = false
-                            },
-                            onAddWord = { appViewModel.setAddWordDialog(true) }
-                        )
-                    } else {
-                        MainEmptyState(
-                            onAddWordClick = { appViewModel.setAddWordDialog(true) }
-                        )
                     }
-                } else {
-                    WordsContent(
-                        words = filteredWords,
-                        isGridView = isGridView,
-                        listState = listState,
-                        gridState = gridState,
-                        onToggleLove = ::toggleLove,
-                        onWordLongPress = { appViewModel.setLongPressItem(it) },
-                        onWordClick = { word ->
-                            navHostController.navigate("word_detail/${word.uid}")
+
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 12.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "$totalWordsCount ${if (totalWordsCount == 1) "word" else "words"} available",
+                                fontSize = 14.sp,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                fontWeight = FontWeight.Medium
+                            )
+
+                            Surface(
+                                shape = RoundedCornerShape(8.dp),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    text = when (sortBy) {
+                                        "newest" -> "Newest First"
+                                        "oldest" -> "Oldest First"
+                                        "alphabetical" -> "A-Z"
+                                        else -> ""
+                                    },
+                                    fontSize = 12.sp,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.Medium,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                                )
+                            }
                         }
-                    )
+                    }
+
+                    val chunkedWords = myWords.chunked(10)
+
+                    items(chunkedWords.size) { chunkIndex ->
+                        FlowRow(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            chunkedWords[chunkIndex].forEach { word ->
+                                QuickWordCard(
+                                    word = word,
+                                    onToggleLove = { toggleLove(word) },
+                                    onItemLongPress = { appViewModel.setLongPressItem(word) },
+                                    onItemClick = { navHostController.navigate("word_detail/${word.uid}") }
+                                )
+                            }
+                        }
+
+                        if (chunkIndex < chunkedWords.size - 1) {
+                            Spacer(modifier = Modifier.height(8.dp))
+                        }
+                    }
+
+                    if (isLoadingMore) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(32.dp),
+                                    strokeWidth = 3.dp
+                                )
+                            }
+                        }
+                    }
+
+                    if (!hasMoreData && myWords.isNotEmpty()) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Text(
+                                    text = "You've reached the end",
+                                    fontSize = 14.sp,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+
+                    if (myWords.isEmpty() && !isLoadingMore) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                                ) {
+                                    Icon(
+                                        imageVector = if (searchQuery.isNotEmpty())
+                                            Icons.Default.SearchOff
+                                        else
+                                            Icons.Default.BookmarkBorder,
+                                        contentDescription = null,
+                                        modifier = Modifier.size(48.dp),
+                                        tint = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f)
+                                    )
+                                    Text(
+                                        text = if (searchQuery.isNotEmpty()) "No words found" else "No words yet",
+                                        fontSize = 18.sp,
+                                        fontWeight = FontWeight.SemiBold,
+                                        color = MaterialTheme.colorScheme.onSurface
+                                    )
+                                    Text(
+                                        text = if (searchQuery.isNotEmpty())
+                                            "Try a different search term"
+                                        else
+                                            "Start building your vocabulary by adding words",
+                                        fontSize = 14.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                        textAlign = TextAlign.Center
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
             }
-        }
-    }
-}
-
-
-@Composable
-fun ResultsSummary(
-    query: String,
-    totalResults: Int,
-    totalWords: Int,
-    onClearSearch: () -> Unit
-) {
-    Surface(
-        shape = RoundedCornerShape(12.dp),
-        color = MaterialTheme.colorScheme.secondaryContainer.copy(alpha = 0.3f)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(12.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = "Search Results",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = "$totalResults of $totalWords words found for \"$query\"",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-
-            TextButton(
-                onClick = onClearSearch,
-                contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp)
-            ) {
-                Text(
-                    "Clear",
-                    fontSize = 12.sp,
-                    fontWeight = FontWeight.Medium
-                )
-            }
-        }
-    }
-}
-
-@OptIn(ExperimentalAnimationApi::class)
-@Composable
-fun WordsContent(
-    words: List<Word>,
-    isGridView: Boolean,
-    listState: androidx.compose.foundation.lazy.LazyListState,
-    gridState: androidx.compose.foundation.lazy.grid.LazyGridState,
-    onToggleLove: (Word) -> Unit,
-    onWordClick: (Word) -> Unit,
-    onWordLongPress: (Word) -> Unit
-) {
-    AnimatedContent(
-        targetState = isGridView,
-        transitionSpec = {
-            fadeIn(animationSpec = tween(300)).togetherWith(fadeOut(animationSpec = tween(300)))
-        }
-    ) { useGrid ->
-        if (useGrid) {
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                words.forEach { word ->
-                    QuickWordCard(
-                        word = word,
-                        onToggleLove = { onToggleLove(word) },
-                        onItemClick = { onWordClick(word) },
-                        onItemLongPress = { onWordLongPress(word) },
-                    )
-                }
-            }
-
-        } else {
-            LazyColumn(
-                state = listState,
-                contentPadding = PaddingValues(bottom = 88.dp),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                items(words, key = { it.uid }) { word ->
-                    QuickWordListCard(
-                        word = word,
-                        onToggleLove = { onToggleLove(word) },
-                        onItemClick = { onWordClick(word) }
-                    )
-                }
-            }
-        }
-    }
-}
-
-@Composable
-fun SearchEmptyState(
-    query: String,
-    onClearSearch: () -> Unit,
-    onAddWord: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(32.dp),
-    ) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.3f)
-        ) {
-            Icon(
-                imageVector = Icons.Default.SearchOff,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.error,
-                modifier = Modifier
-                    .padding(24.dp)
-                    .size(48.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "No results found",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "No words found for \"$query\"",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Row(
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            OutlinedButton(
-                onClick = onClearSearch,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Text("Clear Search")
-            }
-
-            Button(
-                onClick = onAddWord,
-                shape = RoundedCornerShape(12.dp)
-            ) {
-                Icon(
-                    imageVector = Icons.Default.Add,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp)
-                )
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Add Word")
-            }
-        }
-    }
-}
-
-@Composable
-fun MainEmptyState(
-    onAddWordClick: () -> Unit
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(32.dp),
-
-        ) {
-        Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
-        ) {
-            Icon(
-                imageVector = Icons.Default.MenuBook,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .padding(24.dp)
-                    .size(48.dp)
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Text(
-            text = "Start Your Dictionary",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(8.dp))
-
-        Text(
-            text = "Add your first word to begin building your personal vocabulary",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-        )
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        Button(
-            onClick = onAddWordClick,
-            shape = RoundedCornerShape(12.dp)
-        ) {
-            Icon(
-                imageVector = Icons.Default.Add,
-                contentDescription = null,
-                modifier = Modifier.size(18.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text("Add First Word")
         }
     }
 }

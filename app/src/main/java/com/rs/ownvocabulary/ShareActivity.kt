@@ -12,6 +12,7 @@ import com.rs.ownvocabulary.composeable.AddWordDialogShare
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 import com.rs.ownvocabulary.ui.theme.OwnVocabularyTheme
 import kotlin.let
+import androidx.compose.runtime.collectAsState
 
 
 class ShareActivity : ComponentActivity() {
@@ -35,7 +36,6 @@ class ShareActivity : ComponentActivity() {
         println(intent.action)
         println(intent.data)
         val text = handleIncomingIntent(intent)
-        println("receivedLink: $text")
 
         setContent {
             OwnVocabularyTheme() {
@@ -43,6 +43,7 @@ class ShareActivity : ComponentActivity() {
                     showDialog = true,
                     incomingWord = text,
                     onDismiss = { handleClose() },
+                    userId = appViewModel.currentUser.collectAsState().value?.userId,
                     onAddWord = {
                         appViewModel.addWord(it) {
                             if (it != null) {

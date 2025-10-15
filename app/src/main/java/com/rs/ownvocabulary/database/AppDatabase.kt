@@ -16,7 +16,7 @@ data class Word(
     val id: Long = 0,
     val uid: String = UUID.randomUUID().toString(),
     val word: String,
-    val userId: String,
+    val userId: String?,
     val type: String = "word",
     val shortMeaning: String = "",
     val details: String = "",
@@ -31,7 +31,6 @@ data class Word(
     val retryCount: Int = 0,
     val lastSyncAttempt: Long? = null,
 )
-
 
 
 data class WordPartial(
@@ -93,6 +92,16 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         private const val COLUMN_RETRY_COUNT = "retry_count"
         private const val COLUMN_LAST_SYNC_ATTEMPT = "last_sync_attempt"
 
+
+        // Favorites table and column names
+        private const val TABLE_WORD_FAV = "word_fav"
+        private const val COLUMN_FAV_ID = "_id"
+        private const val COLUMN_FAV_USER_ID = "userId"
+        private const val COLUMN_FAV_WORD_UID = "uid"
+        private const val COLUMN_FAV_CREATED_AT = "createdAt"
+        private const val COLUMN_FAV_UPDATED_AT = "updatedAt"
+
+
         fun getInstance(context: Context): WordDatabase {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: WordDatabase(context.applicationContext).also { INSTANCE = it }
@@ -107,7 +116,7 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
             """
             CREATE TABLE IF NOT EXISTS $TABLE_WORDS (
                 $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
-                $COLUMN_UID TEXT UNIQUE NOT NULL,
+                $COLUMN_UID TEXT UNIQUE NOT NULL, 
                 $COLUMN_WORD TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 $COLUMN_TYPE TEXT DEFAULT 'word',
                 $COLUMN_SHORT_MEANING TEXT DEFAULT '',
@@ -127,59 +136,262 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         """.trimIndent()
         )
 
-        // Create index for better performance
+        // Create word_fav table
+        db.execSQL(
+            """
+        CREATE TABLE IF NOT EXISTS $TABLE_WORD_FAV (
+            $COLUMN_FAV_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+            $COLUMN_FAV_USER_ID TEXT NOT NULL,
+            $COLUMN_FAV_WORD_UID TEXT NOT NULL,
+            $COLUMN_FAV_CREATED_AT INTEGER NOT NULL,
+            $COLUMN_FAV_UPDATED_AT INTEGER NOT NULL,
+            $COLUMN_SYNC_STATUS TEXT DEFAULT 'PENDING',
+            $COLUMN_RETRY_COUNT INTEGER DEFAULT 0,
+            UNIQUE($COLUMN_FAV_USER_ID, $COLUMN_FAV_WORD_UID),
+           
+            FOREIGN KEY($COLUMN_FAV_WORD_UID) REFERENCES $TABLE_WORDS($COLUMN_UID) ON DELETE CASCADE
+        )
+    """.trimIndent()
+        )
+
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_word ON $TABLE_WORDS ($COLUMN_WORD)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_uid ON $TABLE_WORDS ($COLUMN_UID)")
         db.execSQL("CREATE INDEX IF NOT EXISTS idx_updated_at ON $TABLE_WORDS ($COLUMN_UPDATED_AT)")
+
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fav_user_id ON $TABLE_WORD_FAV ($COLUMN_FAV_USER_ID)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fav_word_uid ON $TABLE_WORD_FAV ($COLUMN_FAV_WORD_UID)")
+        db.execSQL("CREATE INDEX IF NOT EXISTS idx_fav_user_word ON $TABLE_WORD_FAV ($COLUMN_FAV_USER_ID, $COLUMN_FAV_WORD_UID)")
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        // Handle database upgrades here
         if (oldVersion < newVersion) {
             // Add any schema changes here
         }
     }
 
+    fun addFavorite(userId: String, wordUid: String) {
+        executor.execute {
+            val values = ContentValues().apply {
+                put(COLUMN_FAV_USER_ID, userId)
+                put(COLUMN_FAV_WORD_UID, wordUid)
+                put(COLUMN_FAV_CREATED_AT, System.currentTimeMillis())
+                put(COLUMN_FAV_UPDATED_AT, System.currentTimeMillis())
+            }
+            writableDatabase.insertWithOnConflict(
+                TABLE_WORD_FAV,
+                null,
+                values,
+                SQLiteDatabase.CONFLICT_IGNORE
+            )
+        }
+    }
+
+    fun removeFavorite(userId: String, wordUid: String) {
+        executor.execute {
+            writableDatabase.delete(
+                TABLE_WORD_FAV,
+                "$COLUMN_FAV_USER_ID = ? AND $COLUMN_FAV_WORD_UID = ?",
+                arrayOf(userId, wordUid)
+            )
+        }
+    }
+
     fun getAllWords(
+        authId: String,
         sortOrder: SortOrder = SortOrder.UpdatedAtDesc,
         favoriteOnly: Boolean = false,
         proficiencyFilter: String? = null,
+        limit: Int = 100,
+        offset: Int = 0,
         callback: (List<Word>) -> Unit
     ) {
         executor.execute {
             val words = mutableListOf<Word>()
             val db = readableDatabase
 
-            var selection = "$COLUMN_SYNC_STATUS != ?"
-            val selectionArgs = mutableListOf(SyncStatus.DELETED.name)
+            val selectionList = mutableListOf<String>()
+            val selectionArgs = mutableListOf<String>()
+
+            // Add authId as first argument for JOIN
+            selectionArgs.add(authId)
+
+            selectionList.add("$TABLE_WORDS.$COLUMN_SYNC_STATUS != ?")
+            selectionArgs.add(SyncStatus.DELETED.name)
 
             if (favoriteOnly) {
-                selection += " AND $COLUMN_IS_FAVORITE = ?"
-                selectionArgs.add("1")
+                selectionList.add("$TABLE_WORD_FAV.$COLUMN_FAV_ID IS NOT NULL")
             }
 
             if (!proficiencyFilter.isNullOrEmpty()) {
-                selection += " AND $COLUMN_PROFICIENCY_LEVEL = ?"
+                selectionList.add("$TABLE_WORDS.$COLUMN_PROFICIENCY_LEVEL = ?")
                 selectionArgs.add(proficiencyFilter)
             }
 
+            val selection = selectionList.joinToString(" AND ")
+
             val orderBy = when (sortOrder) {
-                SortOrder.CreatedAtAsc -> "$COLUMN_CREATED_AT ASC"
-                SortOrder.CreatedAtDesc -> "$COLUMN_CREATED_AT DESC"
-                SortOrder.UpdatedAtAsc -> "$COLUMN_UPDATED_AT ASC"
-                SortOrder.UpdatedAtDesc -> "$COLUMN_UPDATED_AT DESC"
-                SortOrder.WordAsc -> "$COLUMN_WORD ASC"
-                SortOrder.WordDesc -> "$COLUMN_WORD DESC"
+                SortOrder.CreatedAtAsc -> "$TABLE_WORDS.$COLUMN_CREATED_AT ASC"
+                SortOrder.CreatedAtDesc -> "$TABLE_WORDS.$COLUMN_CREATED_AT DESC"
+                SortOrder.UpdatedAtAsc -> "$TABLE_WORDS.$COLUMN_UPDATED_AT ASC"
+                SortOrder.UpdatedAtDesc -> "$TABLE_WORDS.$COLUMN_UPDATED_AT DESC"
+                SortOrder.WordAsc -> "$TABLE_WORDS.$COLUMN_WORD ASC"
+                SortOrder.WordDesc -> "$TABLE_WORDS.$COLUMN_WORD DESC"
+            }
+
+            val query = """
+            SELECT $TABLE_WORDS.*, 
+                   CASE WHEN $TABLE_WORD_FAV.$COLUMN_FAV_ID IS NOT NULL THEN 1 ELSE 0 END as is_favorite
+            FROM $TABLE_WORDS
+            LEFT JOIN $TABLE_WORD_FAV ON $TABLE_WORDS.$COLUMN_UID = $TABLE_WORD_FAV.$COLUMN_FAV_WORD_UID 
+                AND $TABLE_WORD_FAV.$COLUMN_FAV_USER_ID = ?
+            WHERE $selection
+            ORDER BY $orderBy
+            LIMIT $limit OFFSET $offset
+        """.trimIndent()
+
+            val cursor = db.rawQuery(query, selectionArgs.toTypedArray())
+
+            while (cursor.moveToNext()) {
+                words.add(getWordFromCursor(cursor))
+            }
+            cursor.close()
+            callback(words)
+        }
+    }
+
+
+    fun getTotalWordsCountExceptOwn(
+        authId: String,
+        searchQuery: String = "",
+        callback: (Int) -> Unit
+    ) {
+        executor.execute {
+            val db = readableDatabase
+
+            val selectionList = mutableListOf<String>()
+            val selectionArgsList = mutableListOf<String>()
+
+            // Base conditions
+            selectionList.add("$COLUMN_SYNC_STATUS != ?")
+            selectionArgsList.add(SyncStatus.DELETED.name)
+
+            selectionList.add("$COLUMN_USER_ID != ?")
+            selectionArgsList.add(authId)
+
+            // Search query
+            if (searchQuery.isNotEmpty()) {
+                selectionList.add("($COLUMN_WORD LIKE ? OR $COLUMN_SHORT_MEANING LIKE ? OR $COLUMN_DETAILS LIKE ?)")
+                val searchPattern = "%$searchQuery%"
+                selectionArgsList.add(searchPattern)
+                selectionArgsList.add(searchPattern)
+                selectionArgsList.add(searchPattern)
+            }
+
+            val selection = selectionList.joinToString(" AND ")
+
+            val cursor = db.rawQuery(
+                "SELECT COUNT(*) FROM $TABLE_WORDS WHERE $selection",
+                selectionArgsList.toTypedArray()
+            )
+
+            var count = 0
+            if (cursor.moveToFirst()) {
+                count = cursor.getInt(0)
+            }
+            cursor.close()
+            callback(count)
+        }
+    }
+
+    fun getTotalWordsCountOwn(
+        authId: String,
+        searchQuery: String = "",
+        callback: (Int) -> Unit
+    ) {
+        executor.execute {
+            val db = readableDatabase
+
+            val selectionList = mutableListOf<String>()
+            val selectionArgsList = mutableListOf<String>()
+
+            // Base conditions
+            selectionList.add("$COLUMN_SYNC_STATUS != ?")
+            selectionArgsList.add(SyncStatus.DELETED.name)
+
+            selectionList.add("$COLUMN_USER_ID = ?")
+            selectionArgsList.add(authId)
+
+            if (searchQuery.isNotEmpty()) {
+                selectionList.add("($COLUMN_WORD LIKE ? OR $COLUMN_SHORT_MEANING LIKE ? OR $COLUMN_DETAILS LIKE ?)")
+                val searchPattern = "%$searchQuery%"
+                selectionArgsList.add(searchPattern)
+                selectionArgsList.add(searchPattern)
+                selectionArgsList.add(searchPattern)
+            }
+
+            val selection = selectionList.joinToString(" AND ")
+
+            val cursor = db.rawQuery(
+                "SELECT COUNT(*) FROM $TABLE_WORDS WHERE $selection",
+                selectionArgsList.toTypedArray()
+            )
+
+            var count = 0
+            if (cursor.moveToFirst()) {
+                count = cursor.getInt(0)
+            }
+            cursor.close()
+            callback(count)
+        }
+    }
+
+    fun getAllWordsExceptOwn(
+        authId: String,
+        limit: Int = 20,
+        offset: Int = 0,
+        searchQuery: String = "",
+        sortBy: String = "newest", // newest, oldest, alphabetical
+        callback: (List<Word>) -> Unit
+    ) {
+        executor.execute {
+            val words = mutableListOf<Word>()
+            val db = readableDatabase
+
+            val selectionList = mutableListOf<String>()
+            val selectionArgsList = mutableListOf<String>()
+
+            selectionList.add("$COLUMN_SYNC_STATUS != ?")
+            selectionArgsList.add(SyncStatus.DELETED.name)
+
+            selectionList.add("$COLUMN_USER_ID != ?")
+            selectionArgsList.add(authId)
+
+            if (searchQuery.isNotEmpty()) {
+                selectionList.add("($COLUMN_WORD LIKE ? OR $COLUMN_SHORT_MEANING LIKE ? OR $COLUMN_DETAILS LIKE ?)")
+                val searchPattern = "%$searchQuery%"
+                selectionArgsList.add(searchPattern)
+                selectionArgsList.add(searchPattern)
+                selectionArgsList.add(searchPattern)
+            }
+
+            val selection = selectionList.joinToString(" AND ")
+
+            // Sorting
+            val orderBy = when (sortBy) {
+                "oldest" -> "$COLUMN_CREATED_AT ASC"
+                "alphabetical" -> "$COLUMN_WORD COLLATE NOCASE ASC"
+                else -> "$COLUMN_CREATED_AT DESC" // newest (default)
             }
 
             val cursor = db.query(
                 TABLE_WORDS,
                 null,
                 selection,
-                selectionArgs.toTypedArray(),
+                selectionArgsList.toTypedArray(),
                 null,
                 null,
-                orderBy
+                orderBy,
+                "$offset, $limit"
             )
 
             while (cursor.moveToNext()) {
@@ -189,6 +401,73 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
             callback(words)
         }
     }
+
+
+    fun getAllWordsOwn(
+        authId: String,
+        limit: Int = 20,
+        offset: Int = 0,
+        searchQuery: String = "",
+        sortBy: String = "newest", // newest, oldest, alphabetical
+        callback: (List<Word>) -> Unit
+    ) {
+        executor.execute {
+            println("authId----------------- $authId")
+            val words = mutableListOf<Word>()
+            val db = readableDatabase
+
+            val selectionList = mutableListOf<String>()
+            val selectionArgsList = mutableListOf<String>()
+
+            selectionList.add("$TABLE_WORDS.$COLUMN_SYNC_STATUS != ?")
+            selectionArgsList.add(SyncStatus.DELETED.name)
+
+            selectionList.add("$TABLE_WORDS.$COLUMN_USER_ID = ?")
+            selectionArgsList.add(authId)
+
+            if (searchQuery.isNotEmpty()) {
+                selectionList.add("($TABLE_WORDS.$COLUMN_WORD LIKE ? OR $TABLE_WORDS.$COLUMN_SHORT_MEANING LIKE ? OR $TABLE_WORDS.$COLUMN_DETAILS LIKE ?)")
+                val searchPattern = "%$searchQuery%"
+                selectionArgsList.add(searchPattern)
+                selectionArgsList.add(searchPattern)
+                selectionArgsList.add(searchPattern)
+            }
+
+            val selection = selectionList.joinToString(" AND ")
+
+            val orderBy = when (sortBy) {
+                "oldest" -> "$TABLE_WORDS.$COLUMN_CREATED_AT ASC"
+                "alphabetical" -> "$TABLE_WORDS.$COLUMN_WORD COLLATE NOCASE ASC"
+                else -> "$TABLE_WORDS.$COLUMN_CREATED_AT DESC" // newest (default)
+            }
+
+            // Join with word_fav table to check if favorited
+            val query = """
+            SELECT $TABLE_WORDS.*, 
+                   CASE WHEN $TABLE_WORD_FAV.$COLUMN_FAV_ID IS NOT NULL THEN 1 ELSE 0 END as is_favorite
+            FROM $TABLE_WORDS
+            LEFT JOIN $TABLE_WORD_FAV ON $TABLE_WORDS.$COLUMN_UID = $TABLE_WORD_FAV.$COLUMN_FAV_WORD_UID 
+                AND $TABLE_WORD_FAV.$COLUMN_FAV_USER_ID = ?
+            WHERE $selection
+            ORDER BY $orderBy
+            LIMIT $limit OFFSET $offset
+        """.trimIndent()
+
+            // Add authId for the JOIN condition at the beginning of args
+            val allArgs = mutableListOf(authId).apply {
+                addAll(selectionArgsList)
+            }
+
+            val cursor = db.rawQuery(query, allArgs.toTypedArray())
+
+            while (cursor.moveToNext()) {
+                words.add(getWordFromCursor(cursor))
+            }
+            cursor.close()
+            callback(words)
+        }
+    }
+
 
     fun totalWordCount(callback: (Int) -> Unit) {
         executor.execute {
@@ -262,33 +541,71 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         }
     }
 
-    // Get frequently viewed words (most viewed in last 30 days)
-    fun getFrequentViewWords(includeFavorite: Boolean = false, callback: (List<Word>) -> Unit) {
+    fun getFavoriteWords(
+        authId: String,
+        limit: Int = 20,
+        offset: Int = 0,
+        callback: (List<Word>) -> Unit
+    ) {
+        executor.execute {
+            val words = mutableListOf<Word>()
+            val db = readableDatabase
+
+            val query = """
+            SELECT $TABLE_WORDS.*, 
+                   1 as is_favorite
+            FROM $TABLE_WORDS
+            INNER JOIN $TABLE_WORD_FAV ON $TABLE_WORDS.$COLUMN_UID = $TABLE_WORD_FAV.$COLUMN_FAV_WORD_UID 
+                AND $TABLE_WORD_FAV.$COLUMN_FAV_USER_ID = ?
+            WHERE $TABLE_WORDS.$COLUMN_SYNC_STATUS != ?
+            ORDER BY $TABLE_WORD_FAV.$COLUMN_FAV_CREATED_AT DESC
+            LIMIT $limit OFFSET $offset
+        """.trimIndent()
+
+            val cursor = db.rawQuery(query, arrayOf(authId, SyncStatus.DELETED.name))
+
+            while (cursor.moveToNext()) {
+                words.add(getWordFromCursor(cursor))
+            }
+            cursor.close()
+            callback(words)
+        }
+    }
+
+    fun getFrequentViewWords(
+        authId: String,
+        limit: Int = 20,
+        offset: Int = 0,
+        callback: (List<Word>) -> Unit
+    ) {
         executor.execute {
             val words = mutableListOf<Word>()
             val db = readableDatabase
 
             val thirtyDaysAgo = System.currentTimeMillis() - (30 * 24 * 60 * 60 * 1000L)
 
-            var selection = "$COLUMN_SYNC_STATUS != ? AND ($COLUMN_LAST_VIEWED >= ? AND $COLUMN_VIEW_COUNT > 0) AND $COLUMN_IS_FAVORITE = 0 "
-            val selectionArgs = arrayOf(SyncStatus.DELETED.name, thirtyDaysAgo.toString())
+            val query = """
+            SELECT $TABLE_WORDS.*, 
+                   CASE WHEN $TABLE_WORD_FAV.$COLUMN_FAV_ID IS NOT NULL THEN 1 ELSE 0 END as is_favorite
+            FROM $TABLE_WORDS
+            LEFT JOIN $TABLE_WORD_FAV ON $TABLE_WORDS.$COLUMN_UID = $TABLE_WORD_FAV.$COLUMN_FAV_WORD_UID 
+                AND $TABLE_WORD_FAV.$COLUMN_FAV_USER_ID = ?
+            WHERE $TABLE_WORDS.$COLUMN_SYNC_STATUS != ? 
+                AND $TABLE_WORDS.$COLUMN_LAST_VIEWED >= ? 
+                AND $TABLE_WORDS.$COLUMN_VIEW_COUNT > 0
+            ORDER BY $TABLE_WORDS.$COLUMN_VIEW_COUNT DESC
+            LIMIT $limit OFFSET $offset
+        """.trimIndent()
 
-
-            val cursor = db.query(
-                TABLE_WORDS,
-                null,
-                selection,
-                selectionArgs,
-                null,
-                null,
-                "$COLUMN_VIEW_COUNT DESC LIMIT 500"
+            val cursor = db.rawQuery(
+                query,
+                arrayOf(authId, SyncStatus.DELETED.name, thirtyDaysAgo.toString())
             )
 
-            cursor.use {
-                while (it.moveToNext()) {
-                    words.add(getWordFromCursor(it))
-                }
+            while (cursor.moveToNext()) {
+                words.add(getWordFromCursor(cursor))
             }
+            cursor.close()
             callback(words)
         }
     }
@@ -362,6 +679,18 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
         try {
             db.beginTransaction()
             words.forEach { word ->
+                // Check if word already exists
+                val cursor = db.query(
+                    TABLE_WORDS,
+                    arrayOf(COLUMN_ID),
+                    "$COLUMN_WORD = ?",
+                    arrayOf(word.word ?: ""),
+                    null, null, null
+                )
+
+                val exists = cursor.count > 0
+                cursor.close()
+
                 val values = ContentValues().apply {
                     put(COLUMN_UID, word.uid)
                     put(COLUMN_WORD, word.word ?: "")
@@ -379,20 +708,20 @@ class WordDatabase private constructor(context: Context) : SQLiteOpenHelper(
                     put(COLUMN_LAST_SYNC_ATTEMPT, word.lastSyncAttempt ?: 0)
 
                     val now = System.currentTimeMillis()
-                    if (word.id == 0L) {
+                    if (!exists) {
                         put(COLUMN_CREATED_AT, word.createdAt ?: now)
                     }
                     put(COLUMN_UPDATED_AT, word.updatedAt ?: now)
                 }
 
-                val rowsAffected = db.update(
-                    TABLE_WORDS,
-                    values,
-                    "$COLUMN_UID = ?",
-                    arrayOf(word.uid)
-                )
-
-                if (rowsAffected == 0) {
+                if (exists) {
+                    db.update(
+                        TABLE_WORDS,
+                        values,
+                        "$COLUMN_WORD = ?",
+                        arrayOf(word.word ?: "")
+                    )
+                } else {
                     db.insert(TABLE_WORDS, null, values)
                 }
             }

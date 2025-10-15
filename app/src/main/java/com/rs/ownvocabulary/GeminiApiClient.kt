@@ -16,7 +16,7 @@ class GeminiApiClient {
 
     private val apiKeys = BuildConfig.GEMINI_API_KEYS.split(",")
 
-    private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+    private val baseUrl = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
 
     suspend fun handleGenerate(word: String, allGeneratedSentences: String, count: Int): List<String> {
         try {
@@ -78,7 +78,9 @@ class GeminiApiClient {
         println("api key $apiKey .")
 
         val request = Request.Builder()
-            .url("$baseUrl?key=$apiKey")
+            .url(baseUrl)
+            .addHeader("x-goog-api-key", "AIzaSyCUxTdYhyK0FnUoKVwEc8iq4A6Ux2EHIVA")
+            .addHeader("Content-Type", "application/json")
             .post(requestBody.toString().toRequestBody("application/json".toMediaType()))
             .build()
 
@@ -89,6 +91,8 @@ class GeminiApiClient {
             println(response.body.toString())
             throw IOException("API failed: ${response.code}")
         }
+
+        println(response.body.toString())
 
         val responseBody = response.body?.string() ?: throw IOException("Empty response")
         val jsonResponse = JSONObject(responseBody)

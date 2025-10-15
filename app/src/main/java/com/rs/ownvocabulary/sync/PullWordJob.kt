@@ -5,7 +5,6 @@ import com.google.gson.Gson
 import com.rs.ownvocabulary.api.HttpHelper
 import com.rs.ownvocabulary.database.WordPartial
 
-
 data class PullNoteJobResponse(
     val status: String,
     val data: List<WordPartial>,
@@ -33,8 +32,6 @@ class PullWordJob(
         do {
             val lastTime = SyncManager.getLastSyncTime()
             val startTime = System.currentTimeMillis()
-
-            println("lastTime ${lastTime}")
 
             val response = tryWithRetry {
                 if (!isConnected()) throw NoConnectionException()

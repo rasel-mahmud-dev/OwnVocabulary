@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    id("com.google.gms.google-services")
 }
 
 android {
@@ -33,19 +34,30 @@ android {
         buildConfigField("String", "GEMINI_API_KEYS", "\"${properties.getProperty("GEMINI_API_KEYS", "")}\"")
     }
 
+    signingConfigs {
+        create("testConfig") {
+            storeFile = file("./test-key.jks")
+            storePassword = "123456"
+            keyAlias = "key0"
+            keyPassword = "123456"
+        }
+    }
+
     buildTypes {
 
         debug {
-            isMinifyEnabled = true
+            isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("testConfig")
+            isDebuggable = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            buildConfigField("String", "API_KEY", "\"your_debug_api_key\"")
         }
 
         release {
             isMinifyEnabled = true
+            signingConfig = signingConfigs.getByName("testConfig")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -101,4 +113,13 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.3")
 
     implementation("androidx.navigation:navigation-compose:2.9.3")
+
+
+
+    implementation("com.google.firebase:firebase-auth:24.0.1")
+    implementation("com.google.firebase:firebase-firestore:26.0.0")
+    implementation("androidx.credentials:credentials:1.5.0")
+    implementation("androidx.credentials:credentials-play-services-auth:1.5.0")
+    implementation("com.google.android.libraries.identity.googleid:googleid:1.1.1")
+    implementation(platform("com.google.firebase:firebase-bom:34.3.0"))
 }

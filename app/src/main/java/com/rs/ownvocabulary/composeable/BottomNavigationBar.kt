@@ -50,7 +50,7 @@ fun BottomNavigationBar(
     val surfaceVariant = MaterialTheme.colorScheme.surfaceVariant
 
     NavigationBar(
-        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+        containerColor = MaterialTheme.colorScheme.surface,
         tonalElevation = tonalElevation,
         modifier = Modifier
             .fillMaxWidth()
@@ -65,17 +65,23 @@ fun BottomNavigationBar(
                 "home"
             ),
             ModernNavItem(
-                "Dictionary",
+                "My Words",
                 Icons.Rounded.Book,
                 Icons.Outlined.Book,
                 "dictionary"
             ),
             ModernNavItem(
-                "Analytics",
+                "Discover",
                 Icons.Rounded.Analytics,
                 Icons.Outlined.Analytics,
-                "analytics"
+                "discover"
             ),
+//            ModernNavItem(
+//                "Analytics",
+//                Icons.Rounded.Analytics,
+//                Icons.Outlined.Analytics,
+//                "analytics"
+//            ),
             ModernNavItem(
                 "Profile",
                 Icons.Rounded.Person,

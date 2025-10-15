@@ -25,6 +25,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.rs.ownvocabulary.TTSManager
 import com.rs.ownvocabulary.composeable.AddAnExample
@@ -44,6 +45,7 @@ fun WordPractice(navHostController: NavHostController, uid: String, appViewModel
     var wordDetail by remember { mutableStateOf<Word?>(null) }
     var isFavorite by remember { mutableStateOf(false) }
     var isLoading by remember { mutableStateOf(true) }
+    val user  by appViewModel.currentUser.collectAsStateWithLifecycle()
 
     var showExamples by remember { mutableStateOf(true) }
     var showEditModal by remember { mutableStateOf(false) }
@@ -92,6 +94,8 @@ fun WordPractice(navHostController: NavHostController, uid: String, appViewModel
                         .background(MaterialTheme.colorScheme.background)
                 ) {
 
+//                    Text("word userid ${word.userId} uuid: ${user?.userId}")
+
                     WordDetailContent(
                         appViewModel = appViewModel,
                         word = word,
@@ -113,6 +117,7 @@ fun WordPractice(navHostController: NavHostController, uid: String, appViewModel
 
 
         AddWordDialogShare(
+            userId = user?.userId,
             editItem = wordDetail,
             incomingWord = wordDetail?.word ?: "",
             showDialog = showEditModal,
@@ -418,7 +423,7 @@ private fun WordHeaderCard(
 }
 
 @Composable
-private fun StatItem(
+private fun StatItem2(
     icon: ImageVector,
     label: String,
     value: String

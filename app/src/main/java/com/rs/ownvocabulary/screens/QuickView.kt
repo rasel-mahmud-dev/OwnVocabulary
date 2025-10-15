@@ -1,8 +1,6 @@
 package com.rs.ownvocabulary.screens
 
-import android.content.Intent
 import android.widget.Toast
-import androidx.compose.animation.*
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -11,10 +9,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.TrendingUp
 import androidx.compose.material.icons.outlined.FavoriteBorder
 import androidx.compose.material3.*
@@ -24,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
@@ -37,13 +32,9 @@ import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.zIndex
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import com.rs.ownvocabulary.ShareActivity
-import com.rs.ownvocabulary.composeable.AddWordDialogShare
+import com.rs.ownvocabulary.composeable.QuickWordCard
 import com.rs.ownvocabulary.composeable.TopBar
-import com.rs.ownvocabulary.database.SortOrder
-import com.rs.ownvocabulary.database.SyncStatus
 import com.rs.ownvocabulary.database.Word
-import com.rs.ownvocabulary.database.WordPartial
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
@@ -53,8 +44,13 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
 
     val context = LocalContext.current
 
-    var favoriteWords by remember { mutableStateOf<List<Word>>(emptyList()) }
-    var frequentViewWords by remember { mutableStateOf<List<Word>>(emptyList()) }
+    val frequentViewWords by appViewModel.frequentViewWords.collectAsStateWithLifecycle()
+    val favoriteWords by appViewModel.favoriteWords.collectAsStateWithLifecycle()
+    val isInitialLoadFavoriteFrequentItems by appViewModel.isInitialLoadFavoriteFrequentItems.collectAsStateWithLifecycle()
+
+    val currentUser by appViewModel.currentUser.collectAsStateWithLifecycle()
+    val userId = currentUser?.userId ?: ""
+
 
     val fabScale by animateFloatAsState(
         targetValue = if (openAddWordDialog) 0.8f else 1f,
@@ -62,34 +58,23 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
     )
 
     fun load() {
-        appViewModel.db.getAllWords(SortOrder.CreatedAtDesc, true) {
-            favoriteWords = it
-        }
-        appViewModel.db.getFrequentViewWords {
-            frequentViewWords = it
-        }
+        appViewModel.loadFavoriteWords()
+        appViewModel.loadFrequentViewWords()
     }
 
-    LaunchedEffect(Unit) {
-        load()
+    LaunchedEffect(userId, isInitialLoadFavoriteFrequentItems) {
+        if (userId.isNotEmpty() && !isInitialLoadFavoriteFrequentItems) {
+            load()
+        }
     }
 
 
     fun toggleLove(word: Word) {
-        appViewModel.updatePartial(
-            WordPartial(
-                uid = word.uid,
-                syncStatus = SyncStatus.PENDING,
-                isFavorite = !word.isFavorite
-            )
-        ) {
+        appViewModel.toggleFavorite(word.uid, word.isFavorite) {
             if (it != null) {
                 Toast.makeText(context, it, Toast.LENGTH_SHORT).show()
-                return@updatePartial
+                return@toggleFavorite
             }
-            appViewModel.loadWords()
-            load() // Refresh the local data
-            Toast.makeText(context, "Updated", Toast.LENGTH_SHORT).show()
         }
     }
 
@@ -147,41 +132,19 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                     Spacer(modifier = Modifier.height(16.dp))
                 }
 
-                // Quick Stats Section
-//            item {
-//                Row(
-//                    modifier = Modifier
-//                        .fillMaxWidth()
-//                        .padding(bottom = 24.dp),
-//                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-//                ) {
-//                    StatCard(
-//                        title = "Favorites",
-//                        count = favoriteWords.size,
-//                        icon = Icons.Default.Favorite,
-//                        color = Color(0xFFE91E63),
-//                        modifier = Modifier.weight(1f)
-//                    )
-//
-//                    StatCard(
-//                        title = "Frequent",
-//                        count = frequentViewWords.size,
-//                        icon = Icons.Default.TrendingUp,
-//                        color = Color(0xFF4CAF50),
-//                        modifier = Modifier.weight(1f)
-//                    )
-//                }
-//            }
 
-                // Frequent Views Section
-                if (frequentViewWords.isNotEmpty()) {
-                    item {
-                        SectionHeader(
-                            title = "Frequently Viewed",
-                            subtitle = "${frequentViewWords.size} words",
-                            icon = Icons.Default.TrendingUp,
-                            iconTint = Color(0xFF4CAF50)
-                        )
+
+
+
+
+                item {
+                    SectionHeader(
+                        title = "Frequently Viewed",
+                        subtitle = "${frequentViewWords.size} words",
+                        icon = Icons.Default.TrendingUp,
+                        iconTint = Color(0xFF4CAF50)
+                    )
+                    if (frequentViewWords.isNotEmpty()) {
 
                         Spacer(modifier = Modifier.height(16.dp))
 
@@ -204,20 +167,25 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                         }
 
                         Spacer(modifier = Modifier.height(32.dp))
+                    } else {
+                        EmptyState(
+                            onAddWordClick = { appViewModel.setAddWordDialog(true) }
+                        )
                     }
                 }
 
-                if (favoriteWords.isNotEmpty()) {
-                    item {
-                        SectionHeader(
-                            title = "Favorites",
-                            subtitle = "${favoriteWords.size} words",
-                            icon = Icons.Default.Favorite,
-                            iconTint = Color(0xFFE91E63)
-                        )
 
-                        Spacer(modifier = Modifier.height(16.dp))
+                item {
+                    SectionHeader(
+                        title = "Favorites",
+                        subtitle = "${favoriteWords.size} words",
+                        icon = Icons.Default.Favorite,
+                        iconTint = Color(0xFFE91E63)
+                    )
 
+                    Spacer(modifier = Modifier.height(16.dp))
+
+                    if (favoriteWords.isNotEmpty()) {
                         FlowRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             verticalArrangement = Arrangement.spacedBy(8.dp)
@@ -237,16 +205,18 @@ fun QuickView(navHostController: NavHostController, appViewModel: AppViewModel) 
                         }
 
                         Spacer(modifier = Modifier.height(24.dp))
+                    } else {
+
+                                EmptyState(
+                                    onAddWordClick = { appViewModel.setAddWordDialog(true) }
+                                )
+
+
                     }
+
                 }
 
-                if (favoriteWords.isEmpty() && frequentViewWords.isEmpty()) {
-                    item {
-                        EmptyState(
-                            onAddWordClick = { appViewModel.setAddWordDialog(true) }
-                        )
-                    }
-                }
+
             }
         }
     }
@@ -396,76 +366,6 @@ fun EmptyState(
             )
             Spacer(modifier = Modifier.width(8.dp))
             Text("Add Word")
-        }
-    }
-}
-
-@Composable
-fun QuickWordCard(word: Word, onItemClick: () -> Unit, onItemLongPress: ()-> Unit, onToggleLove: () -> Unit) {
-    var isFavorite by remember(word.isFavorite) { mutableStateOf(word.isFavorite) }
-
-    val cardColors = when (word.proficiencyLevel) {
-        "Beginner" -> listOf(Color(0xFF4FACFE), Color(0xFF00F2FE))
-        "Intermediate" -> listOf(Color(0xFFFB8C00), Color(0xFFFFD54F))
-        "Advanced" -> listOf(Color(0xFF667eea), Color(0xFF764ba2))
-        else -> listOf(Color(0xFF6B73FF), Color(0xFF9B59B6))
-    }
-
-    Box(
-        modifier = Modifier
-            .wrapContentWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(MaterialTheme.colorScheme.surfaceContainer)
-            .drawBehind {
-                drawLine(
-                    color = cardColors.first(),
-                    end = androidx.compose.ui.geometry.Offset(0f, 0f),
-                    start = androidx.compose.ui.geometry.Offset(size.width, 0f),
-                    strokeWidth = 4.dp.toPx()
-                )
-            }
-            .pointerInput(Unit) {
-                detectTapGestures(
-                    onTap = { onItemClick() },
-                    onLongPress = {
-                        onItemLongPress()
-                    }
-                )
-            }
-
-    ) {
-
-        Row(
-            modifier = Modifier
-                .wrapContentWidth()
-                .padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(0.dp)
-        ) {
-
-            Text(
-                text = word.word,
-                fontSize = 12.sp,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface,
-                maxLines = 1,
-                overflow = TextOverflow.Visible
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(20.dp)
-                    .clip(RoundedCornerShape(50.dp))
-                    .clickable { onToggleLove() },
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Filled.Favorite else Icons.Outlined.FavoriteBorder,
-                    contentDescription = "Favorite",
-                    tint = if (isFavorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.size(12.dp)
-                )
-            }
         }
     }
 }

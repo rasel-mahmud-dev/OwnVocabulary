@@ -39,6 +39,7 @@ import com.rs.ownvocabulary.utils.DeviceId
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AddWordDialogShare(
+    userId: String?,
     editItem: Word? = null,
     incomingWord: String?,
     showDialog: Boolean,
@@ -57,7 +58,6 @@ fun AddWordDialogShare(
     var expanded by remember { mutableStateOf(false) }
 
     val focusRequester = remember { FocusRequester() }
-    val userId = remember { DeviceId.getDeviceId(context) }
 
     val configuration = LocalConfiguration.current
     val screenWidth = configuration.screenWidthDp.dp
@@ -285,7 +285,6 @@ fun AddWordDialogShare(
                 }
             }
         },
-
         confirmButton = {
             Row(
                 modifier = Modifier.fillMaxWidth(),
@@ -304,9 +303,16 @@ fun AddWordDialogShare(
 
                 Button(
                     onClick = {
+
+                        if (userId.isNullOrEmpty()) {
+                            Toast.makeText(context, "Please login first", Toast.LENGTH_SHORT).show()
+                            return@Button
+                        }
+
                         val trimmedWord = word.trim()
                         if (trimmedWord.isBlank()) {
-                            Toast.makeText(context, "Please enter a word", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Please enter a word", Toast.LENGTH_SHORT)
+                                .show()
                             return@Button
                         }
 
@@ -315,10 +321,11 @@ fun AddWordDialogShare(
                             .filter { it.isNotBlank() }
                             .distinct()
 
-                        println("wordsToAdd $wordsToAdd")
+                        println("wordsToAdd $wordsToAdd users id $userId")
 
                         if (wordsToAdd.isEmpty()) {
-                            Toast.makeText(context, "Please enter valid words", Toast.LENGTH_SHORT).show()
+                            Toast.makeText(context, "Please enter valid words", Toast.LENGTH_SHORT)
+                                .show()
                             return@Button
                         }
 

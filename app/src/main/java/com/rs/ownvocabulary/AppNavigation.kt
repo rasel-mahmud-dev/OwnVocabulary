@@ -23,10 +23,13 @@ import androidx.compose.ui.Modifier
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.rs.ownvocabulary.layouts.AuthLayout
 import com.rs.ownvocabulary.layouts.LayoutWithCreateWord
 import com.rs.ownvocabulary.layouts.MainLayout
 import com.rs.ownvocabulary.layouts.QuickWordViewLayout
+import com.rs.ownvocabulary.screens.AboutScreen
 import com.rs.ownvocabulary.screens.AnalyticsScreen
+import com.rs.ownvocabulary.screens.Discover
 import com.rs.ownvocabulary.screens.ProfileScreen
 import com.rs.ownvocabulary.screens.QuickView
 import com.rs.ownvocabulary.screens.TestPage
@@ -70,75 +73,98 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
 //        checkAndRequestPermissions(activity)
 //    }
 
-    val startDestination = remember(initialIntent) {
-        when {
-            initialIntent?.hasExtra("route") == true &&
-                    initialIntent.getStringExtra("route") == "new-diary" -> "new-diary"
-
-            else -> "home"
-        }
-    }
 
     var selectedItem by rememberSaveable { mutableStateOf("home") }
 
     Box(modifier = Modifier.fillMaxSize()) {
         NavHost(
             navController = navController,
-            startDestination = "home"
+//            startDestination = "profile"
 //            startDestination = "word_detail/fe291334-a8b8-4b9a-9aee-863f7df32002"
-//                startDestination = startDestination // "home",
+            startDestination = "dictionary",
+//            startDestination =  "home",
         ) {
 
             composable("home") {
-                QuickWordViewLayout(appViewModel) {
-                    LayoutWithCreateWord(appViewModel) {
-                        MainLayout(
-                            navController = navController,
-                            selectedItem = selectedItem,
-                            setSelectedItem = { selectedItem = it }
-                        ) {
-                            QuickView(navController, appViewModel)
+                AuthLayout(navController, appViewModel) {
+                    QuickWordViewLayout(appViewModel) {
+                        LayoutWithCreateWord(appViewModel) {
+                            MainLayout(
+                                navController = navController,
+                                selectedItem = selectedItem,
+                                setSelectedItem = { selectedItem = it }
+                            ) {
+                                QuickView(navController, appViewModel)
+                            }
                         }
                     }
                 }
             }
 
-            composable("analytics") {
-                MainLayout(
-                    navController = navController,
-                    selectedItem = selectedItem,
-                    setSelectedItem = { selectedItem = it }
-                ) {
-                    AnalyticsScreen(navController, appViewModel)
-                }
-            }
-            composable("profile") {
-                MainLayout(
-                    navController = navController,
-                    selectedItem = selectedItem,
-                    setSelectedItem = { selectedItem = it }
-                ) {
-                    ProfileScreen(navController, appViewModel)
+            composable("dictionary") {
+                AuthLayout(navController, appViewModel) {
+                    QuickWordViewLayout(appViewModel) {
+                        LayoutWithCreateWord(appViewModel) {
+                            MainLayout(
+                                navController = navController,
+                                selectedItem = selectedItem,
+                                setSelectedItem = { selectedItem = it }
+                            ) {
+                                Vocabulary(navController, appViewModel)
+                            }
+                        }
+                    }
                 }
             }
 
-            composable("dictionary") {
-                QuickWordViewLayout(appViewModel) {
-                LayoutWithCreateWord(appViewModel) {
+            composable("discover") {
+                AuthLayout(navController, appViewModel) {
+                    QuickWordViewLayout(appViewModel) {
+                        MainLayout(
+                            navController = navController,
+                            selectedItem = selectedItem,
+                            setSelectedItem = { selectedItem = it }
+                        ) {
+                            Discover(navController, appViewModel)
+                        }
+                    }
+                }
+            }
+
+
+//            composable("analytics") {
+//                MainLayout(
+//                    navController = navController,
+//                    selectedItem = selectedItem,
+//                    setSelectedItem = { selectedItem = it }
+//                ) {
+//                    AnalyticsScreen(navController, appViewModel)
+//                }
+//            }
+
+            composable("profile") {
+                AuthLayout(navController, appViewModel) {
                     MainLayout(
                         navController = navController,
                         selectedItem = selectedItem,
                         setSelectedItem = { selectedItem = it }
                     ) {
-                        Vocabulary(navController, appViewModel)
+                        ProfileScreen(navController, appViewModel)
                     }
-                }
                 }
             }
 
+
+
             composable("word_detail/{uid}") {
-                val uid = it.arguments?.getString("uid") ?: ""
-                WordPractice(navController, uid, appViewModel)
+                AuthLayout(navController, appViewModel) {
+                    val uid = it.arguments?.getString("uid") ?: ""
+                    WordPractice(navController, uid, appViewModel)
+                }
+            }
+
+            composable("about") {
+                AboutScreen(navController)
             }
 
         }
