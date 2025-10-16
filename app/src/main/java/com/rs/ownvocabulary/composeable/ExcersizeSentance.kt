@@ -89,7 +89,7 @@ fun ExcersizeSentance(
             newSentences.forEachIndexed { index, it ->
                 appViewModel.addAiResponse(
                     AIResponseItem(
-                        input = word.word,
+                        wordId = word.uid,
                         output = it,
                         userId = appViewModel.currentUser.value!!.userId,
                         type = "word",

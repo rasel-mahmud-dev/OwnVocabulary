@@ -39,6 +39,7 @@ data class CurrentUser(
     val avatar: String
 )
 
+
 class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     val db = WordDatabase.getInstance(application)
@@ -57,6 +58,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     private var activePullSyncJob: Job? = null
 
+
+    /* AI response */
+    private val _aiResponse = MutableStateFlow<AIResponseItem?>(null)
+    val aiResponse: StateFlow<AIResponseItem?> = _aiResponse.asStateFlow()
 
     /* discover vieowmod */
 
@@ -372,6 +377,69 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
 
 
+    fun setAiResponse(
+        wordId: String,
+        detail: String? = null,
+        synonym: String? = null,
+        antonym: String? = null,
+        exampleSentences: String? = null,
+        shortMeaning: String? = null,
+    ){
+        viewModelScope.launch {
+            try {
+
+                val userId = _currentUser.value?.userId
+                println("userid $userId")
+
+                if(userId.isNullOrEmpty()){
+                    return@launch
+                }
+
+                val updatedAiItem = AIResponseItem(
+                    wordId = wordId,
+                    userId = userId,
+                    detail = detail ?: _aiResponse.value?.detail ?: "",
+                    synonym = synonym ?: _aiResponse.value?.synonym ?: "",
+                    antonym = antonym ?: _aiResponse.value?.antonym ?: "",
+                    exampleSentences = exampleSentences ?: _aiResponse.value?.exampleSentences ?: "",
+                    shortMeaning = shortMeaning ?: _aiResponse.value?.shortMeaning ?: "",
+                    updatedAt = System.currentTimeMillis()
+                )
+
+                println("updatedAiItem ${updatedAiItem}")
+                _aiResponse.value = updatedAiItem
+
+                aiResponseDb.updatePartial(updatedAiItem) {
+                    println("partial udpate result:: $it")
+                }
+
+
+            } catch (ex: Exception) {
+                println(ex.message)
+            }
+        }
+    }
+
+
+    fun saveAiResponse(wordId: String){
+        viewModelScope.launch {
+            try {
+                val shortMeaning = _aiResponse.value?.shortMeaning
+                if(shortMeaning.isNullOrEmpty()) return@launch
+
+                db.updatePartial(WordPartial(
+                    uid = wordId,
+                    shortMeaning = shortMeaning
+                ))
+
+                setAiResponse(wordId, shortMeaning = "")
+
+            } catch (ex: Exception) {
+                println(ex?.message)
+            }
+        }
+    }
+
     fun loadAuth() {
         viewModelScope.launch {
             val auth = SyncManager.getAuth()
@@ -406,6 +474,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             db.getWordByUid(uid) {
                 cb(it)
+            }
+
+            aiResponseDb.findOneByWordId(uid, _currentUser.value?.userId ?: "") {
+                _aiResponse.value = it
             }
         }
     }

@@ -35,6 +35,7 @@ import com.rs.ownvocabulary.screens.QuickView
 import com.rs.ownvocabulary.screens.TestPage
 import com.rs.ownvocabulary.screens.Vocabulary
 import com.rs.ownvocabulary.screens.WordPractice
+import com.rs.ownvocabulary.screens.test.WordPractice2
 import com.rs.ownvocabulary.viewmodels.AppViewModel
 
 
@@ -80,8 +81,8 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
         NavHost(
             navController = navController,
 //            startDestination = "profile"
-//            startDestination = "word_detail/fe291334-a8b8-4b9a-9aee-863f7df32002"
-            startDestination = "dictionary",
+            startDestination = "word_detail/46d80ad5-e07b-4b8b-b3bf-2f525d9946ee"
+//            startDestination = "dictionary",
 //            startDestination =  "home",
         ) {
 
@@ -154,12 +155,10 @@ fun AppNavigation(initialIntent: Intent, activity: Context, appViewModel: AppVie
                 }
             }
 
-
-
             composable("word_detail/{uid}") {
                 AuthLayout(navController, appViewModel) {
                     val uid = it.arguments?.getString("uid") ?: ""
-                    WordPractice(navController, uid, appViewModel)
+                    WordPractice2(navController, uid, appViewModel)
                 }
             }
 

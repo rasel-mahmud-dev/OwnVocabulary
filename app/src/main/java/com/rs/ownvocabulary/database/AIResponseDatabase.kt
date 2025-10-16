@@ -7,14 +7,19 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import java.util.concurrent.Executors
-import java.util.*
 
 data class AIResponseItem(
     val id: Long = 0,
-    val uid: String = UUID.randomUUID().toString(),
-    val input: String,
-    val output: String,
-    val userId: String,
+    val uid: String = System.currentTimeMillis().toString(),
+    val wordId: String = "",
+    val input: String = "",
+    val output: String = "",
+    var detail: String = "",
+    var synonym: String = "",
+    var antonym: String = "",
+    var exampleSentences: String = "",
+    var shortMeaning: String = "",
+    var userId: String = "",
     val type: String = "word",
     val createdAt: Long = System.currentTimeMillis(),
     val updatedAt: Long = System.currentTimeMillis(),
@@ -22,7 +27,6 @@ data class AIResponseItem(
     val retryCount: Int = 0,
     val lastSyncAttempt: Long? = null
 )
-
 
 class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelper(
     context, DATABASE_NAME, null, DATABASE_VERSION
@@ -32,14 +36,20 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
         @Volatile
         private var INSTANCE: AIResponseDatabase? = null
         private const val DATABASE_NAME = "ai_response_db.db"
-        private const val DATABASE_VERSION = 2
+        private const val DATABASE_VERSION = 3
 
         private const val TABLE_AI_RESPONSES = "ai_responses"
 
         private const val COLUMN_ID = "id"
         private const val COLUMN_UID = "uid"
         private const val COLUMN_INPUT = "input"
+        private const val COLUMN_WORD_ID = "word_id"
         private const val COLUMN_OUTPUT = "output"
+        private const val COLUMN_DETAIL = "detail"
+        private const val COLUMN_SYNONYM = "synonym"
+        private const val COLUMN_ANTONYM = "antonym"
+        private const val COLUMN_EXAMPLE_SENTENCES = "example_sentences"
+        private const val COLUMN_SHORT_MEANING = "short_meaning"
         private const val COLUMN_USER_ID = "user_id"
         private const val COLUMN_TYPE = "type"
         private const val COLUMN_CREATED_AT = "created_at"
@@ -63,8 +73,14 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
             CREATE TABLE IF NOT EXISTS $TABLE_AI_RESPONSES (
                 $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 $COLUMN_UID TEXT UNIQUE NOT NULL,
+                $COLUMN_WORD_ID TEXT UNIQUE NOT NULL,
                 $COLUMN_INPUT TEXT NOT NULL,
                 $COLUMN_OUTPUT TEXT NOT NULL,
+                $COLUMN_DETAIL TEXT DEFAULT '',
+                $COLUMN_SYNONYM TEXT DEFAULT '',
+                $COLUMN_ANTONYM TEXT DEFAULT '',
+                $COLUMN_EXAMPLE_SENTENCES TEXT DEFAULT '',
+                $COLUMN_SHORT_MEANING TEXT DEFAULT '',
                 $COLUMN_USER_ID TEXT NOT NULL,
                 $COLUMN_TYPE TEXT DEFAULT 'word',
                 $COLUMN_CREATED_AT INTEGER NOT NULL,
@@ -83,9 +99,37 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
     }
 
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
-        if (oldVersion < newVersion) {
-            db.execSQL("DROP TABLE IF EXISTS $TABLE_AI_RESPONSES")
-            onCreate(db)
+        if (oldVersion < 3) {
+            try {
+                // Add new columns if they don't exist
+                db.execSQL("ALTER TABLE $TABLE_AI_RESPONSES ADD COLUMN $COLUMN_DETAIL TEXT DEFAULT ''")
+            } catch (e: Exception) {
+                Log.d("AIResponseDatabase", "Column $COLUMN_DETAIL may already exist")
+            }
+
+            try {
+                db.execSQL("ALTER TABLE $TABLE_AI_RESPONSES ADD COLUMN $COLUMN_SYNONYM TEXT DEFAULT ''")
+            } catch (e: Exception) {
+                Log.d("AIResponseDatabase", "Column $COLUMN_SYNONYM may already exist")
+            }
+
+            try {
+                db.execSQL("ALTER TABLE $TABLE_AI_RESPONSES ADD COLUMN $COLUMN_ANTONYM TEXT DEFAULT ''")
+            } catch (e: Exception) {
+                Log.d("AIResponseDatabase", "Column $COLUMN_ANTONYM may already exist")
+            }
+
+            try {
+                db.execSQL("ALTER TABLE $TABLE_AI_RESPONSES ADD COLUMN $COLUMN_EXAMPLE_SENTENCES TEXT DEFAULT ''")
+            } catch (e: Exception) {
+                Log.d("AIResponseDatabase", "Column $COLUMN_EXAMPLE_SENTENCES may already exist")
+            }
+
+            try {
+                db.execSQL("ALTER TABLE $TABLE_AI_RESPONSES ADD COLUMN $COLUMN_SHORT_MEANING TEXT DEFAULT ''")
+            } catch (e: Exception) {
+                Log.d("AIResponseDatabase", "Column $COLUMN_SHORT_MEANING may already exist")
+            }
         }
     }
 
@@ -150,6 +194,41 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
         }
     }
 
+    fun findOneByWordId(
+        wordId: String,
+        userId: String,
+        callback: (AIResponseItem?) -> Unit
+    ) {
+        executor.execute {
+            val db = readableDatabase
+            var item: AIResponseItem? = null
+
+            println("find by user id $userId and word id $wordId")
+
+            val selection = "$COLUMN_USER_ID = ? AND $COLUMN_WORD_ID = ?"
+            val selectionArgs = arrayOf(userId, wordId)
+            val orderBy = "$COLUMN_UPDATED_AT DESC"
+            val limit = "1"
+
+            val cursor = db.query(
+                TABLE_AI_RESPONSES,
+                null,
+                selection,
+                selectionArgs,
+                null,
+                null,
+                orderBy,
+                limit
+            )
+
+            if (cursor.moveToFirst()) {
+                item = getItemFromCursor(cursor)
+            }
+            cursor.close()
+            callback(item)
+        }
+    }
+
     fun insert(item: AIResponseItem, callback: (Long) -> Unit = {}) {
         executor.execute {
             val db = writableDatabase
@@ -159,6 +238,11 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
                     put(COLUMN_UID, item.uid)
                     put(COLUMN_INPUT, item.input)
                     put(COLUMN_OUTPUT, item.output)
+                    put(COLUMN_DETAIL, item.detail)
+                    put(COLUMN_SYNONYM, item.synonym)
+                    put(COLUMN_ANTONYM, item.antonym)
+                    put(COLUMN_EXAMPLE_SENTENCES, item.exampleSentences)
+                    put(COLUMN_SHORT_MEANING, item.shortMeaning)
                     put(COLUMN_USER_ID, item.userId)
                     put(COLUMN_TYPE, item.type)
                     put(COLUMN_CREATED_AT, item.createdAt)
@@ -190,6 +274,11 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
                 val values = ContentValues().apply {
                     put(COLUMN_INPUT, item.input)
                     put(COLUMN_OUTPUT, item.output)
+                    put(COLUMN_DETAIL, item.detail)
+                    put(COLUMN_SYNONYM, item.synonym)
+                    put(COLUMN_ANTONYM, item.antonym)
+                    put(COLUMN_EXAMPLE_SENTENCES, item.exampleSentences)
+                    put(COLUMN_SHORT_MEANING, item.shortMeaning)
                     put(COLUMN_TYPE, item.type)
                     put(COLUMN_UPDATED_AT, System.currentTimeMillis())
                     put(COLUMN_SYNC_STATUS, item.syncStatus.name)
@@ -205,6 +294,98 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
 
             } catch (ex: Exception) {
                 Log.e("AIResponseDatabase", "Error updating AI response: ${ex.message}")
+                callback(0)
+            }
+        }
+    }
+
+    fun updatePartial(
+        item: AIResponseItem,
+        callback: (Int) -> Unit = {}
+    ) {
+        executor.execute {
+            val db = writableDatabase
+            var rowsAffected = 0
+            try {
+                println("update partial $item")
+
+                // Check if record exists
+                val selection = "$COLUMN_USER_ID = ? AND $COLUMN_WORD_ID = ?"
+                val selectionArgs = arrayOf(item.userId, item.wordId)
+
+                val cursor = db.query(
+                    TABLE_AI_RESPONSES,
+                    arrayOf(COLUMN_ID),
+                    selection,
+                    selectionArgs,
+                    null,
+                    null,
+                    null,
+                    "1"
+                )
+
+                val exists = cursor.count > 0
+                cursor.close()
+
+                val values = ContentValues().apply {
+                    if (item.detail.isNullOrBlank()) {
+                        put(COLUMN_DETAIL, item.detail)
+                    }
+                    if (item.synonym.isNullOrBlank()) {
+                        put(COLUMN_SYNONYM, item.synonym)
+                    }
+                    if (item.antonym.isNullOrBlank()) {
+                        put(COLUMN_ANTONYM, item.antonym)
+                    }
+                    if (item.exampleSentences.isNullOrBlank()) {
+                        put(COLUMN_EXAMPLE_SENTENCES, item.exampleSentences)
+                    }
+                    if (item.shortMeaning.isNullOrBlank()) {
+                        put(COLUMN_SHORT_MEANING, item.shortMeaning)
+                    }
+                    put(COLUMN_SYNC_STATUS, item.syncStatus.name)
+                    put(COLUMN_UPDATED_AT, System.currentTimeMillis())
+                }
+
+                if (values.size() == 2) {
+                    // Only syncStatus and updatedAt
+                    callback(0)
+                    return@execute
+                }
+
+                if (exists) {
+                    val whereClause = "$COLUMN_USER_ID = ? AND $COLUMN_WORD_ID = ?"
+                    val whereArgs = arrayOf(item.userId, item.wordId)
+                    rowsAffected = db.update(TABLE_AI_RESPONSES, values, whereClause, whereArgs)
+                } else {
+                    values.apply {
+                        put(COLUMN_USER_ID, item.userId)
+                        put(COLUMN_WORD_ID, item.wordId)
+                        put(COLUMN_UID, item.uid)
+                        put(COLUMN_INPUT, item.input)
+                        put(COLUMN_OUTPUT, item.output)
+                        put(COLUMN_TYPE, item.type)
+                        put(COLUMN_CREATED_AT, item.createdAt)
+                        put(COLUMN_RETRY_COUNT, item.retryCount)
+
+                        // Add empty strings for fields not provided
+                        if (!containsKey(COLUMN_DETAIL)) put(COLUMN_DETAIL, "")
+                        if (!containsKey(COLUMN_SYNONYM)) put(COLUMN_SYNONYM, "")
+                        if (!containsKey(COLUMN_ANTONYM)) put(COLUMN_ANTONYM, "")
+                        if (!containsKey(COLUMN_EXAMPLE_SENTENCES)) put(COLUMN_EXAMPLE_SENTENCES, "")
+                        if (!containsKey(COLUMN_SHORT_MEANING)) put(COLUMN_SHORT_MEANING, "")
+
+                        item.lastSyncAttempt?.let { put(COLUMN_LAST_SYNC_ATTEMPT, it) }
+                    }
+
+                    val id = db.insert(TABLE_AI_RESPONSES, null, values)
+                    rowsAffected = if (id != -1L) 1 else 0
+                }
+
+                callback(rowsAffected)
+
+            } catch (ex: Exception) {
+                Log.e("AIResponseDatabase", "Error updating AI response partially: ${ex.message}")
                 callback(0)
             }
         }
@@ -259,8 +440,14 @@ class AIResponseDatabase private constructor(context: Context) : SQLiteOpenHelpe
         return AIResponseItem(
             id = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_ID)),
             uid = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_UID)),
+            wordId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_WORD_ID)),
             input = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_INPUT)),
             output = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_OUTPUT)),
+            detail = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_DETAIL)),
+            synonym = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_SYNONYM)),
+            antonym = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ANTONYM)),
+            exampleSentences = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_EXAMPLE_SENTENCES)),
+            shortMeaning = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_SHORT_MEANING)),
             userId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_USER_ID)),
             type = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_TYPE)),
             createdAt = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_CREATED_AT)),
