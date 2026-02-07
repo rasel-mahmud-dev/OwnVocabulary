@@ -1,4 +1,4 @@
-package com.rs.ownvocabulary
+package com.rs.myvocabulary
 
 import org.junit.Test
 

@@ -19,6 +19,6 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "OwnVocabulary"
+rootProject.name = "MyVocabulary"
 include(":app")
  

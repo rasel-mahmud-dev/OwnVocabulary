@@ -39,38 +39,15 @@
         <activity
             android:name=".ShareActivity"
             android:exported="true"
-            android:theme="@style/FloatingDialogTheme"
-            android:launchMode="singleInstance"
-            android:label="OwnVocabulary">
-
-            <!-- For sharing text via Share menu -->
+            android:label="Word"
+            android:theme="@style/Theme.OwnVocabulary">
             <intent-filter>
                 <action android:name="android.intent.action.SEND" />
                 <category android:name="android.intent.category.DEFAULT" />
                 <data android:mimeType="text/plain" />
-            </intent-filter>
-
-            <!-- For text selection context menu (PROCESS_TEXT) -->
-            <intent-filter>
-                <action android:name="android.intent.action.PROCESS_TEXT" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-
-            <!-- Optional: For better integration with text selection -->
-            <intent-filter>
-                <action android:name="android.intent.action.PROCESS_TEXT" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/plain" />
-            </intent-filter>
-
-            <!-- Optional: For receiving text from any app -->
-            <intent-filter>
-                <action android:name="android.intent.action.SEND" />
-                <category android:name="android.intent.category.DEFAULT" />
-                <data android:mimeType="text/*" />
             </intent-filter>
         </activity>
+
 
     </application>
 

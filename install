@@ -1,4 +1,18 @@
-adb uninstall com.rs.ownvocabulary
+
+./gradlew clean
+
+# Rebuild everything (including native libraries)
+./gradlew build
+
+# Or for debug build specifically
+#./gradlew assembleDebug
+
+
+# Clean and build release APK
+./gradlew assembleRelease
+#./gradlew assembleDebug
+
+adb uninstall com.rs.myvocabulary
 #adb install ./app/debug/app-debug.apk
-adb install ./app/release/app-release.apk
-# adb shell monkey -p com.rs.ownvocabulary -c android.intent.category.LAUNCHER 1
+adb install ./app/build/outputs/apk/release/app-release.apk
+adb shell monkey -p com.rs.myvocabulary -c android.intent.category.LAUNCHER 1
