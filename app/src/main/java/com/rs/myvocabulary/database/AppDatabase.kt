@@ -7,6 +7,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import android.util.Log
 import com.google.gson.Gson
+import com.google.gson.reflect.TypeToken
 import java.util.*
 import java.util.concurrent.Executors
 import kotlin.collections.forEach
@@ -33,13 +34,13 @@ data class Comment(
 )
 
 data class Tag(
-    val id: Int = 0,
-    val uid: String,
-    val name: String,
-    val createdAt: Long = System.currentTimeMillis(),
-    val updatedAt: Long = System.currentTimeMillis(),
-    val syncStatus: SyncStatus = SyncStatus.PENDING,
-    val isDeleted: Boolean = false,
+        val id: Int = 0,
+        val uid: String,
+        val name: String,
+        val createdAt: Long = System.currentTimeMillis(),
+        val updatedAt: Long = System.currentTimeMillis(),
+        val syncStatus: SyncStatus = SyncStatus.PENDING,
+        val isDeleted: Boolean = false,
 )
 
 data class Word(
@@ -82,6 +83,19 @@ data class Label(
         var associatedNoteCount: Int? = 0,
         val parentId: String? = null
 )
+
+data class NoteCategory(
+        val id: Int = 0,
+        val uid: String = UUID.randomUUID().toString(),
+        val categoryUid: String,
+        val itemUid: String,
+        val createdAt: Long = System.currentTimeMillis(),
+        val updatedAt: Long = System.currentTimeMillis(),
+        val syncStatus: SyncStatus = SyncStatus.PENDING,
+        val isDeleted: Boolean = false
+)
+
+data class PostTag(val postId: String, val tagId: String)
 
 data class WordPartial(
         val id: Long = 0,
@@ -350,6 +364,195 @@ class WordDatabase private constructor(context: Context) :
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 3) {
             onCreate(db)
+        }
+    }
+
+    // FOR BACKUP/RESTORE
+    // FOR BACKUP/RESTORE
+    fun getAllWords(): List<Word> {
+        val words = mutableListOf<Word>()
+        val db = readableDatabase
+        val cursor =
+                db.query(TABLE_WORDS, null, null, null, null, null, "${COLUMN_CREATED_AT} DESC")
+
+        while (cursor.moveToNext()) {
+            words.add(getWordFromCursor(cursor))
+        }
+        cursor.close()
+        return words
+    }
+
+    // FOR BACKUP/RESTORE
+    fun getAllComments(): List<Comment> {
+        val comments = mutableListOf<Comment>()
+        val db = readableDatabase
+        val cursor =
+                db.query(
+                        TABLE_COMMENTS,
+                        null,
+                        null,
+                        null,
+                        null,
+                        null,
+                        "${COLUMN_COMMENT_CREATED_AT} ASC"
+                )
+
+        while (cursor.moveToNext()) {
+            comments.add(getCommentFromCursor(cursor))
+        }
+        cursor.close()
+        return comments
+    }
+
+    fun getAllTags(): List<Tag> {
+        val tags = mutableListOf<Tag>()
+        val db = readableDatabase
+        val cursor =
+                db.query(
+                        TABLE_TAGS,
+                        null,
+                        "${COLUMN_TAG_IS_DELETED} = 0",
+                        null,
+                        null,
+                        null,
+                        "${COLUMN_TAG_NAME} ASC"
+                )
+        while (cursor.moveToNext()) {
+            tags.add(getTagFromCursor(cursor))
+        }
+        cursor.close()
+        return tags
+    }
+
+    fun getAllCategories(): List<Label> {
+        val categories = mutableListOf<Label>()
+        val db = readableDatabase
+        val cursor =
+                db.query(
+                        TABLE_CATEGORIES,
+                        null,
+                        "$COLUMN_IS_DELETED = 0",
+                        null,
+                        null,
+                        null,
+                        "$COLUMN_NAME ASC"
+                )
+        while (cursor.moveToNext()) {
+            categories.add(getLabelFromCursor(cursor))
+        }
+        cursor.close()
+        return categories
+    }
+
+    fun getAllNoteCategories(): List<NoteCategory> {
+        val list = mutableListOf<NoteCategory>()
+        val db = readableDatabase
+        val cursor = db.query(TABLE_NOTE_CATEGORY, null, null, null, null, null, null)
+        while (cursor.moveToNext()) {
+            list.add(
+                    NoteCategory(
+                            id = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_ID)),
+                            uid = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_UID)),
+                            categoryUid =
+                                    cursor.getString(
+                                            cursor.getColumnIndexOrThrow(COLUMN_CATEGORY_UID)
+                                    ),
+                            itemUid =
+                                    cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_ITEM_UID)),
+                            createdAt =
+                                    cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_CREATED_AT)),
+                            updatedAt =
+                                    cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_UPDATED_AT)),
+                            syncStatus =
+                                    try {
+                                        SyncStatus.valueOf(
+                                                cursor.getString(
+                                                        cursor.getColumnIndexOrThrow(
+                                                                COLUMN_SYNC_STATUS
+                                                        )
+                                                )
+                                        )
+                                    } catch (e: Exception) {
+                                        SyncStatus.PENDING
+                                    },
+                            isDeleted =
+                                    cursor.getInt(
+                                            cursor.getColumnIndexOrThrow(COLUMN_IS_DELETED)
+                                    ) == 1
+                    )
+            )
+        }
+        cursor.close()
+        return list
+    }
+
+    fun getAllPostTags(): List<PostTag> {
+        val list = mutableListOf<PostTag>()
+        val db = readableDatabase
+        val cursor = db.query(TABLE_POST_TAGS, null, null, null, null, null, null)
+        while (cursor.moveToNext()) {
+            list.add(
+                    PostTag(
+                            postId =
+                                    cursor.getString(
+                                            cursor.getColumnIndexOrThrow(COLUMN_PT_POST_ID)
+                                    ),
+                            tagId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PT_TAG_ID))
+                    )
+            )
+        }
+        cursor.close()
+        return list
+    }
+
+    fun insertNoteCategories(list: List<NoteCategory>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            list.forEach { item ->
+                val values =
+                        ContentValues().apply {
+                            put(COLUMN_UID, item.uid)
+                            put(COLUMN_CATEGORY_UID, item.categoryUid)
+                            put(COLUMN_ITEM_UID, item.itemUid)
+                            put(COLUMN_CREATED_AT, item.createdAt)
+                            put(COLUMN_UPDATED_AT, item.updatedAt)
+                            put(COLUMN_SYNC_STATUS, item.syncStatus.name)
+                            put(COLUMN_IS_DELETED, if (item.isDeleted) 1 else 0)
+                        }
+                db.insertWithOnConflict(
+                        TABLE_NOTE_CATEGORY,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun insertPostTags(list: List<PostTag>) {
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            list.forEach { item ->
+                val values =
+                        ContentValues().apply {
+                            put(COLUMN_PT_POST_ID, item.postId)
+                            put(COLUMN_PT_TAG_ID, item.tagId)
+                        }
+                db.insertWithOnConflict(
+                        TABLE_POST_TAGS,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
     }
 
@@ -1639,20 +1842,53 @@ class WordDatabase private constructor(context: Context) :
         )
     }
 
+    private fun getCommentFromCursor(cursor: Cursor): Comment {
+        return Comment(
+                _id = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_COMMENT_REMOTE_ID)),
+                username = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_COMMENT_USERNAME)),
+                parentId = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_COMMENT_PARENT_ID)),
+                text = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_COMMENT_TEXT)),
+                audioUrl = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_COMMENT_AUDIO_URL)),
+                mediaUrl = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_COMMENT_MEDIA_URL)),
+                mediaType =
+                        cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_COMMENT_MEDIA_TYPE)),
+                attachments =
+                        try {
+                            val json =
+                                    cursor.getString(
+                                            cursor.getColumnIndexOrThrow(COLUMN_COMMENT_ATTACHMENTS)
+                                    )
+                            if (json != null) {
+                                val type = object : TypeToken<List<CommentAttachment>>() {}.type
+                                Gson().fromJson<List<CommentAttachment>>(json, type)
+                            } else null
+                        } catch (e: Exception) {
+                            null
+                        },
+                createdAt = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_COMMENT_CREATED_AT)),
+                updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_UPDATED_AT))
+        )
+    }
+
     private fun getLabelFromCursor(cursor: Cursor): Label {
         return Label(
                 id = CursorUtils.getIntSafe(cursor, COLUMN_ID) ?: 0,
                 uid = CursorUtils.getStringSafe(cursor, COLUMN_UID) ?: "",
                 name = CursorUtils.getStringSafe(cursor, COLUMN_NAME) ?: "",
-                parentId = CursorUtils.getStringSafe(cursor, COLUMN_CATEGORY_PARENT_UID),
                 color = CursorUtils.getStringSafe(cursor, COLUMN_COLOR) ?: "",
-                createdAt = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_CREATED_AT)),
-                updatedAt = cursor.getLong(cursor.getColumnIndexOrThrow(COLUMN_UPDATED_AT)),
+                parentId = CursorUtils.getStringSafe(cursor, COLUMN_CATEGORY_PARENT_UID),
+                createdAt = CursorUtils.getLongSafe(cursor, COLUMN_CREATED_AT) ?: 0L,
+                updatedAt = CursorUtils.getLongSafe(cursor, COLUMN_UPDATED_AT) ?: 0L,
                 associatedNoteCount = CursorUtils.getIntSafe(cursor, "note_count") ?: 0,
                 syncStatus =
-                        SyncStatus.valueOf(
-                                cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_SYNC_STATUS))
-                        )
+                        try {
+                            SyncStatus.valueOf(
+                                    CursorUtils.getStringSafe(cursor, COLUMN_SYNC_STATUS)
+                                            ?: "PENDING"
+                            )
+                        } catch (e: Exception) {
+                            SyncStatus.PENDING
+                        }
         )
     }
 }

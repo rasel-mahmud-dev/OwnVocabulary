@@ -2,7 +2,6 @@ package com.rs.myvocabulary.utils
 
 import android.content.Context
 import android.net.Uri
-import android.os.Environment
 import java.io.File
 import java.io.FileOutputStream
 import java.util.UUID
@@ -15,7 +14,8 @@ object LocalAssetManager {
             val contentResolver = context.contentResolver
             val inputStream = contentResolver.openInputStream(uri) ?: return null
 
-            val dir = File(Environment.getExternalStorageDirectory(), DIR_NAME)
+            val dir = context.getExternalFilesDir(DIR_NAME)
+            if (dir == null) return null
             if (!dir.exists()) {
                 dir.mkdirs()
             }

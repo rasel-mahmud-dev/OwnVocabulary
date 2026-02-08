@@ -1,10 +1,15 @@
 package com.rs.myvocabulary.utils
 
+import android.content.ContentValues
 import android.content.Context
+import android.os.Build
 import android.os.Environment
+import android.provider.MediaStore
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
 import com.rs.myvocabulary.database.Label
+import com.rs.myvocabulary.database.NoteCategory
+import com.rs.myvocabulary.database.PostTag
 import com.rs.myvocabulary.database.Tag
 import com.rs.myvocabulary.database.Word
 import com.rs.myvocabulary.database.WordDatabase
@@ -33,71 +38,77 @@ object BackupUtils {
 
         val gson = GsonBuilder().setPrettyPrinting().create()
 
-//        try {
-//            // 1. Export Posts
-//            val posts = db.getAllPosts()
-//            File(exportDir, "posts.json").writeText(gson.toJson(posts))
-//
-//            // 2. Export Comments
-//            val comments = db.getAllComments()
-//            File(exportDir, "comments.json").writeText(gson.toJson(comments))
-//
-//            // 3. Export Tags
-//            val tags = db.getAllTags()
-//            File(exportDir, "tags.json").writeText(gson.toJson(tags))
-//
-//            // 4. Export Categories
-//            val categories = db.getAllCategories()
-//            File(exportDir, "categories.json").writeText(gson.toJson(categories))
-//
-//            // 5. Zip the JSON files into a data folder
-//            val backupDir =
-//                    File(Environment.getExternalStorageDirectory(), "learn_media/app_backup")
-//            if (!backupDir.exists()) backupDir.mkdirs()
-//
-//            val sdf = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
-//            val zipFileName = "backup_${sdf.format(Date())}.zip"
-//            val zipFile = File(backupDir, zipFileName)
-//
-//            ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zos ->
-//                // Add JSON files to a 'json' directory in the zip
-//                exportDir.listFiles()?.forEach { file ->
-//                    val entryName = "json/${file.name}"
-//                    zos.putNextEntry(ZipEntry(entryName))
-//                    FileInputStream(file).use { fis -> BufferedInputStream(fis).copyTo(zos) }
-//                    zos.closeEntry()
-//                }
-//
-//                // Now add assets as a zip within this zip?
-//                // "in another dir all assets as zip format"
-//                // Let's create the assets zip first
-//                val assetsZip = createAssetsBackup(context)
-//                if (assetsZip != null) {
-//                    zos.putNextEntry(ZipEntry("assets/${assetsZip.name}"))
-//                    FileInputStream(assetsZip).use { fis -> BufferedInputStream(fis).copyTo(zos) }
-//                    zos.closeEntry()
-//                    assetsZip.delete() // Delete the intermediate zip
-//                }
-//            }
-//
-//            // Cleanup
-//            exportDir.deleteRecursively()
-//
-//            return zipFile
-//        } catch (e: Exception) {
-//            e.printStackTrace()
-//            return null
-//        }
+        try {
+            // 1. Export Posts
+            val posts = db.getAllWords()
+            File(exportDir, "posts.json").writeText(gson.toJson(posts))
 
-        return  null
+            // 2. Export Comments
+            val comments = db.getAllComments()
+            File(exportDir, "comments.json").writeText(gson.toJson(comments))
+
+            // 3. Export Tags
+            val tags = db.getAllTags()
+            File(exportDir, "tags.json").writeText(gson.toJson(tags))
+
+            // 4. Export Categories
+            val categories = db.getAllCategories()
+            File(exportDir, "categories.json").writeText(gson.toJson(categories))
+
+            // 5. Export Note Categories (linking table)
+            val noteCategories = db.getAllNoteCategories()
+            File(exportDir, "note_categories.json").writeText(gson.toJson(noteCategories))
+
+            // 6. Export Post Tags (linking table)
+            val postTags = db.getAllPostTags()
+            File(exportDir, "post_tags.json").writeText(gson.toJson(postTags))
+
+            // 7. Zip the JSON files into a data folder
+            val backupDir = context.getExternalFilesDir("backups")
+            if (backupDir == null || (!backupDir.exists() && !backupDir.mkdirs())) {
+                return null
+            }
+
+            val sdf = SimpleDateFormat("yyyy-MM-dd_HH-mm-ss", Locale.US)
+            val zipFileName = "backup_${sdf.format(Date())}.zip"
+            val zipFile = File(backupDir, zipFileName)
+
+            ZipOutputStream(BufferedOutputStream(FileOutputStream(zipFile))).use { zos ->
+                // Add JSON files to a 'json' directory in the zip
+                exportDir.listFiles()?.forEach { file ->
+                    val entryName = "json/${file.name}"
+                    zos.putNextEntry(ZipEntry(entryName))
+                    FileInputStream(file).use { fis -> BufferedInputStream(fis).copyTo(zos) }
+                    zos.closeEntry()
+                }
+
+                // Now add assets as a zip within this zip?
+                // "in another dir all assets as zip format"
+                // Let's create the assets zip first
+                val assetsZip = createAssetsBackup(context)
+                if (assetsZip != null) {
+                    zos.putNextEntry(ZipEntry("assets/${assetsZip.name}"))
+                    FileInputStream(assetsZip).use { fis -> BufferedInputStream(fis).copyTo(zos) }
+                    zos.closeEntry()
+                    assetsZip.delete() // Delete the intermediate zip
+                }
+            }
+
+            // Cleanup
+            exportDir.deleteRecursively()
+
+            return zipFile
+        } catch (e: Exception) {
+            e.printStackTrace()
+            return null
+        }
     }
 
     fun createAssetsBackup(context: Context): File? {
         try {
-            // Assuming LocalAssetManager stores files in "learn_media" subdirectory of external
-            // storage root
-            val assetsDir = File(Environment.getExternalStorageDirectory(), "learn_media")
-            if (!assetsDir.exists() || assetsDir.listFiles()?.isEmpty() == true) {
+            val assetsDir = context.getExternalFilesDir("media")
+            if (assetsDir == null || !assetsDir.exists() || assetsDir.listFiles()?.isEmpty() == true
+            ) {
                 return null
             }
 
@@ -145,14 +156,14 @@ object BackupUtils {
 
             // 2. Clear Database
             val db = WordDatabase.getInstance(context)
-//            db.clearAllData()
+            //            db.clearAllData()
 
             // 3. Restore Categories
             val categoriesFile = File(jsonDir, "categories.json")
             if (categoriesFile.exists()) {
                 val type = object : TypeToken<List<Label>>() {}.type
                 val categories: List<Label> = gson.fromJson(categoriesFile.readText(), type)
-//                db.insertCategories(categories)
+                //                db.insertCategories(categories)
             }
 
             // 4. Restore Tags
@@ -160,7 +171,7 @@ object BackupUtils {
             if (tagsFile.exists()) {
                 val type = object : TypeToken<List<Tag>>() {}.type
                 val tags: List<Tag> = gson.fromJson(tagsFile.readText(), type)
-//                db.insertTags(tags)
+                //                db.insertTags(tags)
             }
 
             // 5. Restore Posts (includes comments)
@@ -168,15 +179,34 @@ object BackupUtils {
             if (postsFile.exists()) {
                 val type = object : TypeToken<List<Word>>() {}.type
                 val posts: List<Word> = gson.fromJson(postsFile.readText(), type)
-//                db.insertPosts(posts)
+                //                db.insertPosts(posts)
             }
 
-            // 6. Restore Assets
+            // 6. Restore Note Categories
+            val noteCategoriesFile = File(jsonDir, "note_categories.json")
+            if (noteCategoriesFile.exists()) {
+                val type = object : TypeToken<List<NoteCategory>>() {}.type
+                val noteCategories: List<NoteCategory> =
+                        gson.fromJson(noteCategoriesFile.readText(), type)
+                db.insertNoteCategories(noteCategories)
+            }
+
+            // 7. Restore Post Tags
+            val postTagsFile = File(jsonDir, "post_tags.json")
+            if (postTagsFile.exists()) {
+                val type = object : TypeToken<List<PostTag>>() {}.type
+                val postTags: List<PostTag> = gson.fromJson(postTagsFile.readText(), type)
+                db.insertPostTags(postTags)
+            }
+
+            // 8. Restore Assets
             val assetsZipFile = assetsDir.listFiles()?.find { it.name.endsWith(".zip") }
             if (assetsZipFile != null) {
-                val finalAssetsDir = File(Environment.getExternalStorageDirectory(), "learn_media")
-                if (!finalAssetsDir.exists()) finalAssetsDir.mkdirs()
-                FileInputStream(assetsZipFile).use { fis -> unzip(fis, finalAssetsDir) }
+                val finalAssetsDir = context.getExternalFilesDir("media")
+                if (finalAssetsDir != null) {
+                    if (!finalAssetsDir.exists()) finalAssetsDir.mkdirs()
+                    FileInputStream(assetsZipFile).use { fis -> unzip(fis, finalAssetsDir) }
+                }
             }
 
             return true
@@ -188,9 +218,9 @@ object BackupUtils {
         }
     }
 
-    fun getBackupFiles(): List<File> {
-        val backupDir = File(Environment.getExternalStorageDirectory(), "learn_media/app_backup")
-        if (!backupDir.exists()) return emptyList()
+    fun getBackupFiles(context: Context): List<File> {
+        val backupDir = context.getExternalFilesDir("backups")
+        if (backupDir == null || !backupDir.exists()) return emptyList()
         return backupDir
                 .listFiles()
                 ?.filter { it.isFile && it.extension == "zip" }
@@ -225,6 +255,47 @@ object BackupUtils {
                 zis.closeEntry()
                 entry = zis.nextEntry
             }
+        }
+    }
+
+    fun copyFileToPublicDownloads(context: Context, sourceFile: File, fileName: String): Boolean {
+        return try {
+            val contentValues =
+                    ContentValues().apply {
+                        put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
+                        put(MediaStore.MediaColumns.MIME_TYPE, "application/zip")
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                            put(
+                                    MediaStore.MediaColumns.RELATIVE_PATH,
+                                    Environment.DIRECTORY_DOWNLOADS + "/VocabBook"
+                            )
+                            put(MediaStore.MediaColumns.IS_PENDING, 1)
+                        }
+                    }
+
+            val resolver = context.contentResolver
+            val collection =
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                        MediaStore.Downloads.EXTERNAL_CONTENT_URI
+                    } else {
+                        MediaStore.Files.getContentUri("external")
+                    }
+
+            val uri = resolver.insert(collection, contentValues) ?: return false
+
+            resolver.openOutputStream(uri)?.use { outputStream ->
+                sourceFile.inputStream().use { inputStream -> inputStream.copyTo(outputStream) }
+            }
+
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                contentValues.clear()
+                contentValues.put(MediaStore.MediaColumns.IS_PENDING, 0)
+                resolver.update(uri, contentValues, null, null)
+            }
+            true
+        } catch (e: Exception) {
+            e.printStackTrace()
+            false
         }
     }
 }

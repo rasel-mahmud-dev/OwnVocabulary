@@ -19,6 +19,7 @@ import com.rs.myvocabulary.database.WordDatabase
 import com.rs.myvocabulary.database.WordPartial
 import com.rs.myvocabulary.sync.PullWordJob
 import com.rs.myvocabulary.sync.PushWordJob
+import com.rs.myvocabulary.utils.BackupUtils
 import java.io.File
 import java.util.UUID
 import kotlinx.coroutines.Dispatchers
@@ -991,5 +992,43 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
 
         loadNextPracticeCard()
+    }
+
+    fun restoreData(context: Context, uri: android.net.Uri, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            try {
+                context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                    val success = BackupUtils.restoreFromBackup(context, inputStream)
+                    if (success) {
+                        loadData(context) // Refresh UI
+                    }
+                    withContext(Dispatchers.Main) { onComplete(success) }
+                }
+                        ?: withContext(Dispatchers.Main) { onComplete(false) }
+            } catch (e: Exception) {
+                e.printStackTrace()
+                withContext(Dispatchers.Main) { onComplete(false) }
+            }
+        }
+    }
+
+    fun fetchBackupFiles() {
+        _backupFiles.value = BackupUtils.getBackupFiles(getApplication())
+    }
+
+    fun deleteBackupFile(file: java.io.File) {
+        if (BackupUtils.deleteBackupFile(file)) {
+            fetchBackupFiles()
+        }
+    }
+
+    fun restoreFromBackupFile(context: Context, file: java.io.File, onComplete: (Boolean) -> Unit) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val success = BackupUtils.restoreFromFile(context, file)
+            if (success) {
+                loadData(context)
+            }
+            withContext(Dispatchers.Main) { onComplete(success) }
+        }
     }
 }

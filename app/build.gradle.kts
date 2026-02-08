@@ -121,4 +121,5 @@ dependencies {
     implementation("androidx.work:work-runtime-ktx:2.10.3")
 
     implementation("androidx.navigation:navigation-compose:2.9.3")
+
 }

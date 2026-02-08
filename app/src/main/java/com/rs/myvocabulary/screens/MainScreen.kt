@@ -2,7 +2,9 @@ package com.rs.myvocabulary.screens
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.*
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
@@ -10,7 +12,11 @@ import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
 import com.rs.myvocabulary.composeable.QuickWordView
 import com.rs.myvocabulary.composeable.UnifiedAddDialog
 import com.rs.myvocabulary.composeable.detail.DetailDocs
@@ -22,7 +28,7 @@ import com.rs.myvocabulary.viewmodels.AppViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(appViewModel: AppViewModel) {
+fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
     var selectedTab by remember { mutableIntStateOf(0) }
     val tabs = listOf("All", "Words", "Clauses", "Docs")
     var showAddDialog by remember { mutableStateOf(false) }
@@ -35,6 +41,7 @@ fun MainScreen(appViewModel: AppViewModel) {
     // Top bar states
     var showSearchBar by remember { mutableStateOf(false) }
     var showSortMenu by remember { mutableStateOf(false) }
+    var showSettingsSheet by remember { mutableStateOf(false) }
 
     val filterState by appViewModel.filterState.collectAsState()
     val viewMode by appViewModel.viewMode.collectAsState()
@@ -65,9 +72,11 @@ fun MainScreen(appViewModel: AppViewModel) {
                             editingDocUid != null ||
                             isCreatingDoc ||
                             showAddDialog ||
-                            showSearchBar
+                            showSearchBar ||
+                            showSettingsSheet
     ) {
         when {
+            showSettingsSheet -> showSettingsSheet = false
             editingWordUid != null -> editingWordUid = null
             editingDocUid != null -> editingDocUid = null
             isCreatingDoc -> isCreatingDoc = false
@@ -209,6 +218,15 @@ fun MainScreen(appViewModel: AppViewModel) {
                                         )
                                     }
                                 }
+
+                                // Settings icon
+                                IconButton(onClick = { showSettingsSheet = true }) {
+                                    Icon(
+                                            imageVector = Icons.Default.Settings,
+                                            contentDescription = "Settings",
+                                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
                             },
                             colors =
                                     TopAppBarDefaults.topAppBarColors(
@@ -323,6 +341,40 @@ fun MainScreen(appViewModel: AppViewModel) {
                     open = longPressItem != null,
                     onClose = { appViewModel.setLongPressItem(null) }
             )
+
+            // Settings Sheet
+            if (showSettingsSheet) {
+                ModalBottomSheet(
+                        onDismissRequest = { showSettingsSheet = false },
+                        sheetState = rememberModalBottomSheetState(),
+                ) {
+                    Column(
+                            modifier =
+                                    Modifier.fillMaxWidth()
+                                            .padding(horizontal = 16.dp)
+                                            .padding(bottom = 32.dp)
+                    ) {
+                        Text(
+                                "Settings",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                modifier = Modifier.padding(vertical = 16.dp)
+                        )
+
+                        ListItem(
+                                headlineContent = { Text("Backup & Restore") },
+                                leadingContent = {
+                                    Icon(Icons.Default.Backup, contentDescription = null)
+                                },
+                                modifier =
+                                        Modifier.clip(RoundedCornerShape(12.dp)).clickable {
+                                            showSettingsSheet = false
+                                            navController.navigate("backup")
+                                        }
+                        )
+                    }
+                }
+            }
         }
     }
 }
