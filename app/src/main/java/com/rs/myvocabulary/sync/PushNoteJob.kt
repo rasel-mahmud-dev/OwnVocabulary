@@ -2,114 +2,202 @@ package com.rs.myvocabulary.sync
 
 import com.google.gson.Gson
 import com.rs.myvocabulary.api.HttpHelper
-import com.rs.myvocabulary.database.SyncStatus
-import com.rs.myvocabulary.database.Word
-
+import com.rs.myvocabulary.database.*
 import kotlinx.coroutines.delay
 
 data class ApiException(
-    override val message: String,
-    val statusCode: Int? = null,
-    val errorBody: String? = null
-) : Exception(message) {
-    constructor(statusCode: Int, errorBody: String?) : this(
-        message = "API request failed with status $statusCode",
-        statusCode = statusCode,
-        errorBody = errorBody
-    )
-}
+        override val message: String,
+        val statusCode: Int? = null,
+        val errorBody: String? = null
+) : Exception(message)
 
-/**
- * Represents the synchronization status of a note or sync operation
- */
+class NoConnectionException : Exception("No internet connection")
 
-
-class PushWordJob(
-    private val getUnsyncedNotes: () -> List<Word>,
-    private val updateNoteSyncStatus: (noteId: String, retryCount: Int) -> Unit,
-    private val isConnected: () -> Boolean
+/** Generic class for pushing entities to the server. */
+class PushEntityJob<T>(
+        private val endpoint: String,
+        private val getUnsynced: suspend () -> List<T>,
+        private val getUid: (T) -> String,
+        private val updateSyncStatus: (uid: String) -> Unit,
+        private val isConnected: () -> Boolean,
+        private val entityName: String = "Item"
 ) {
     private val httpHelper = HttpHelper.getInstance()
     private val gson = Gson()
-    private val maxRetries = 10
+    private val maxRetries = 5
 
-    @Volatile
-    private var isStopped = false // Flag to control syncing
+    @Volatile private var isStopped = false
 
-    // Call this to stop syncing from outside
     fun stop() {
         isStopped = true
     }
 
     suspend fun startPushing() {
-        // Reset stop flag when starting
         isStopped = false
+        if (!isConnected()) return
 
-        // Check connectivity before starting
-        if (!isConnected()) {
-            println("No internet connection - sync aborted")
-            return
-        }
+        val items = getUnsynced()
+        if (items.isEmpty()) return
 
-        val unsyncedNotes = getUnsyncedNotes()
-        if (unsyncedNotes.isEmpty()) {
-            println("Nothing has to sync.")
-            return
-        }
-
-        unsyncedNotes.forEachIndexed { index, note ->
-            // Check if stopped or disconnected before each note
-            if (isStopped || !isConnected()) {
-                println("Sync stopped - no connection or manual stop")
-                return
-            }
-
-            tryWithRetry(maxRetries) { retryCount ->
-                // Check connection before each retry
-                if (!isConnected()) {
-                    println("Lost connection during sync")
-                    throw NoConnectionException()
+        items.forEach { item ->
+            if (isStopped || !isConnected()) return
+            val uid = getUid(item)
+            try {
+                tryWithRetry(maxRetries) {
+                    val json = gson.toJson(item)
+                    val response = httpHelper.put("$endpoint/$uid", json)
+                    if (response.statusCode in 200..299) {
+                        updateSyncStatus(uid)
+                    } else {
+                        throw ApiException("Failed to push $entityName: ${response.statusCode}")
+                    }
                 }
-
-                createNote(note, note.id != 0L)
-
+            } catch (e: Exception) {
+                println("Error syncing $entityName ($uid): ${e.message}")
             }
         }
     }
 
-    private suspend fun createNote(note: Word, isUpdate: Boolean) {
-        if (!isConnected()) throw NoConnectionException()
-        println("pushing word -> ${note.word}")
-        if (!isConnected()) throw NoConnectionException()
-        val noteJson = gson.toJson(note)
-        val response = httpHelper.put("/api/v2/word/${note.uid}", noteJson)
-        println(response)
-        if (response.statusCode in 200..299) {
-            updateNoteSyncStatus(note.uid, 1)
-        } else {
-            println("Failed to create word: ${response.statusCode} is Update -> ${isUpdate}")
-            throw ApiException("Failed to create word: ${response.statusCode}")
-        }
-    }
-
-    private suspend fun tryWithRetry(max: Int, block: suspend (retryCount: Int) -> Unit) {
+    private suspend fun tryWithRetry(max: Int, block: suspend () -> Unit) {
         var retryCount = 0
         while (retryCount < max && !isStopped) {
             try {
-                block(retryCount)
+                if (!isConnected()) throw NoConnectionException()
+                block()
                 return
             } catch (e: NoConnectionException) {
-                // Don't retry if there's no connection
                 throw e
             } catch (e: Exception) {
                 retryCount++
                 if (retryCount >= max) throw e
-                val delayedTime = 2000L * retryCount
-                println("retryCount $retryCount delayedTime $delayedTime")
-                delay(delayedTime)
+                delay(2000L * retryCount)
             }
         }
     }
 }
 
-class NoConnectionException : Exception("No internet connection")
+class PushWordJob(
+        private val getUnsyncedNotes: suspend () -> List<Word>,
+        private val updateNoteSyncStatus: (noteId: String, retryCount: Int) -> Unit,
+        private val isConnected: () -> Boolean
+) {
+    private val job =
+            PushEntityJob(
+                    endpoint = "/api/v2/word",
+                    getUnsynced = getUnsyncedNotes,
+                    getUid = { it.uid },
+                    updateSyncStatus = { updateNoteSyncStatus(it, 1) },
+                    isConnected = isConnected,
+                    entityName = "Word"
+            )
+    fun stop() = job.stop()
+    suspend fun startPushing() = job.startPushing()
+}
+
+class PushTagJob(
+        private val getUnsyncedTags: suspend () -> List<Tag>,
+        private val updateSyncStatus: (uid: String) -> Unit,
+        private val isConnected: () -> Boolean
+) {
+    private val job =
+            PushEntityJob(
+                    endpoint = "/api/v2/tag",
+                    getUnsynced = getUnsyncedTags,
+                    getUid = { it.uid },
+                    updateSyncStatus = updateSyncStatus,
+                    isConnected = isConnected,
+                    entityName = "Tag"
+            )
+    fun stop() = job.stop()
+    suspend fun startPushing() = job.startPushing()
+}
+
+class PushCategoryJob(
+        private val getUnsyncedCategories: suspend () -> List<Label>,
+        private val updateSyncStatus: (uid: String) -> Unit,
+        private val isConnected: () -> Boolean
+) {
+    private val job =
+            PushEntityJob(
+                    endpoint = "/api/v2/category",
+                    getUnsynced = getUnsyncedCategories,
+                    getUid = { it.uid },
+                    updateSyncStatus = updateSyncStatus,
+                    isConnected = isConnected,
+                    entityName = "Category"
+            )
+    fun stop() = job.stop()
+    suspend fun startPushing() = job.startPushing()
+}
+
+class PushCommentJob(
+        private val getUnsyncedComments: suspend () -> List<Comment>,
+        private val updateSyncStatus: (remoteId: String) -> Unit,
+        private val isConnected: () -> Boolean
+) {
+    private val job =
+            PushEntityJob(
+                    endpoint = "/api/v2/comment",
+                    getUnsynced = getUnsyncedComments,
+                    getUid = { it._id },
+                    updateSyncStatus = updateSyncStatus,
+                    isConnected = isConnected,
+                    entityName = "Comment"
+            )
+    fun stop() = job.stop()
+    suspend fun startPushing() = job.startPushing()
+}
+
+class PushPostCommentJob(
+        private val getUnsyncedComments: suspend () -> List<PostComment>,
+        private val updateSyncStatus: (uid: String) -> Unit,
+        private val isConnected: () -> Boolean
+) {
+    private val job =
+            PushEntityJob(
+                    endpoint = "/api/v2/post-comment",
+                    getUnsynced = getUnsyncedComments,
+                    getUid = { it.uid },
+                    updateSyncStatus = updateSyncStatus,
+                    isConnected = isConnected,
+                    entityName = "PostComment"
+            )
+    fun stop() = job.stop()
+    suspend fun startPushing() = job.startPushing()
+}
+
+class PushPostTagJob(
+        private val getUnsyncedPostTags: suspend () -> List<PostTag>,
+        private val updateSyncStatus: (uid: String) -> Unit,
+        private val isConnected: () -> Boolean
+) {
+    private val job =
+            PushEntityJob(
+                    endpoint = "/api/v2/word-tag",
+                    getUnsynced = getUnsyncedPostTags,
+                    getUid = { it.uid },
+                    updateSyncStatus = updateSyncStatus,
+                    isConnected = isConnected,
+                    entityName = "WordTag"
+            )
+    fun stop() = job.stop()
+    suspend fun startPushing() = job.startPushing()
+}
+
+class PushNoteCategoryJob(
+        private val getUnsyncedNoteCategories: suspend () -> List<NoteCategory>,
+        private val updateSyncStatus: (uid: String) -> Unit,
+        private val isConnected: () -> Boolean
+) {
+    private val job =
+            PushEntityJob(
+                    endpoint = "/api/v2/word-category",
+                    getUnsynced = getUnsyncedNoteCategories,
+                    getUid = { it.uid },
+                    updateSyncStatus = updateSyncStatus,
+                    isConnected = isConnected,
+                    entityName = "WordCategory"
+            )
+    fun stop() = job.stop()
+    suspend fun startPushing() = job.startPushing()
+}

@@ -1,0 +1,13 @@
+
+{
+  "INVALID_CREDENTIAL": {
+    "code": "ERR_0",
+    "message": "The provided credentials are invalid.",
+    "status": 401
+  },
+  "ACCOUNT_VERIFICATION_REQUIRED": {
+    "code": "ERR_1",
+    "message": "Account verification is required.",
+    "status": 403
+  }
+}

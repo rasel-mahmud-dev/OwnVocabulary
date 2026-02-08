@@ -17,7 +17,19 @@ import com.rs.myvocabulary.database.Tag
 import com.rs.myvocabulary.database.Word
 import com.rs.myvocabulary.database.WordDatabase
 import com.rs.myvocabulary.database.WordPartial
+import com.rs.myvocabulary.sync.PullCategoryJob
+import com.rs.myvocabulary.sync.PullCommentJob
+import com.rs.myvocabulary.sync.PullNoteCategoryJob
+import com.rs.myvocabulary.sync.PullPostCommentJob
+import com.rs.myvocabulary.sync.PullPostTagJob
+import com.rs.myvocabulary.sync.PullTagJob
 import com.rs.myvocabulary.sync.PullWordJob
+import com.rs.myvocabulary.sync.PushCategoryJob
+import com.rs.myvocabulary.sync.PushCommentJob
+import com.rs.myvocabulary.sync.PushNoteCategoryJob
+import com.rs.myvocabulary.sync.PushPostCommentJob
+import com.rs.myvocabulary.sync.PushPostTagJob
+import com.rs.myvocabulary.sync.PushTagJob
 import com.rs.myvocabulary.sync.PushWordJob
 import com.rs.myvocabulary.utils.BackupUtils
 import java.io.File
@@ -206,7 +218,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ========== WORD LOADING FUNCTIONS ==========
 
-    fun loadFavoriteWords(loadMore: Boolean = false) {
+    fun loadFavoriteWords() {
         viewModelScope.launch {
             try {
                 db.getFavoriteWords(limit = 100000, offset = 0) { words ->
@@ -218,7 +230,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun loadFrequentViewWords(loadMore: Boolean = false) {
+    fun loadFrequentViewWords() {
         viewModelScope.launch {
             try {
                 db.getFrequentViewWords(limit = 100, offset = 0) { words ->
@@ -428,6 +440,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         cb("Failed to insert word into database")
                         return@launch
                     }
+                    startWordSync()
                 }
 
                 // Reload the appropriate list based on type
@@ -476,6 +489,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             loadAllItems()
             loadDocs()
             loadClouseWordList()
+            startWordSync()
             withContext(Dispatchers.Main) { onComplete() }
         }
     }
@@ -514,6 +528,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Reload lists to ensure correct sorting
                 loadClouseWordList()
+                startWordSync()
             }
         }
     }
@@ -523,6 +538,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val result = db.incrementViewCount(uid)
                 println("increment view count result: $result")
+                startWordSync()
             } catch (ex: Exception) {
                 println("error incrementing view count: $ex")
             }
@@ -531,10 +547,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ========== COMMENT FUNCTIONS ==========
 
-    fun insertWordComment(context: Context, wordId: String, comment: Comment) {
+    fun insertWordComment(wordId: String, comment: Comment) {
         viewModelScope.launch(Dispatchers.IO) {
             db.insertComment(wordId, comment)
             loadNoteDetailGeneric(wordId)
+            startWordSync()
         }
     }
 
@@ -545,7 +562,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun insertMultipleComments(context: Context, wordId: String, sentences: List<String>) {
+    fun insertMultipleComments(wordId: String, sentences: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
             val newComments =
                     sentences.map { sentence ->
@@ -556,7 +573,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 createdAt = System.currentTimeMillis()
                         )
                     }
-            newComments.forEach { comment -> insertWordComment(context, wordId, comment) }
+            newComments.forEach { comment -> insertWordComment(wordId, comment) }
         }
     }
 
@@ -591,46 +608,166 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         activeSyncJob =
                 viewModelScope.launch {
                     try {
-                        val unsyncedNotes = db.getUnsyncedWords()
-                        println("Total ${unsyncedNotes.size} notes to sync")
+                        val isConnected = { isNetworkAvailable(context = application) }
 
-                        if (unsyncedNotes.isEmpty()) {
-                            println("no need to sync")
-                            return@launch
+                        // 1. Sync Tags
+                        launch {
+                            PushTagJob(
+                                            isConnected = isConnected,
+                                            getUnsyncedTags = { db.getUnsyncedTags() },
+                                            updateSyncStatus = {
+                                                db.updateTagSyncStatus(it, SyncStatus.SYNCED)
+                                            }
+                                    )
+                                    .startPushing()
                         }
 
-                        val pushJob =
-                                PushWordJob(
-                                        isConnected = { isNetworkAvailable(context = application) },
-                                        getUnsyncedNotes = { unsyncedNotes },
-                                        updateNoteSyncStatus = { id, retryCount ->
-                                            db.updateWordSyncStatus(id, SyncStatus.SYNCED)
-                                        }
-                                )
+                        // 2. Sync Categories
+                        launch {
+                            PushCategoryJob(
+                                            isConnected = isConnected,
+                                            getUnsyncedCategories = { db.getUnsyncedCategories() },
+                                            updateSyncStatus = {
+                                                db.updateCategorySyncStatus(it, SyncStatus.SYNCED)
+                                            }
+                                    )
+                                    .startPushing()
+                        }
 
-                        pushJob.startPushing()
+                        // 3. Sync Comments
+                        launch {
+                            PushCommentJob(
+                                            isConnected = isConnected,
+                                            getUnsyncedComments = { db.getUnsyncedComments() },
+                                            updateSyncStatus = {
+                                                db.updateCommentSyncStatus(it, SyncStatus.SYNCED)
+                                            }
+                                    )
+                                    .startPushing()
+                        }
+
+                        // 4. Sync PostComments
+                        launch {
+                            PushPostCommentJob(
+                                            isConnected = isConnected,
+                                            getUnsyncedComments = { db.getUnsyncedPostComments() },
+                                            updateSyncStatus = {
+                                                db.updatePostCommentSyncStatus(
+                                                        it,
+                                                        SyncStatus.SYNCED
+                                                )
+                                            }
+                                    )
+                                    .startPushing()
+                        }
+
+                        // 5. Sync PostTags (Associations)
+                        launch {
+                            PushPostTagJob(
+                                            isConnected = isConnected,
+                                            getUnsyncedPostTags = { db.getUnsyncedPostTags() },
+                                            updateSyncStatus = {
+                                                db.updatePostTagSyncStatus(it, SyncStatus.SYNCED)
+                                            }
+                                    )
+                                    .startPushing()
+                        }
+
+                        // 6. Sync NoteCategories (Associations)
+                        launch {
+                            PushNoteCategoryJob(
+                                            isConnected = isConnected,
+                                            getUnsyncedNoteCategories = {
+                                                db.getUnsyncedNoteCategories()
+                                            },
+                                            updateSyncStatus = {
+                                                db.updateNoteCategorySyncStatus(
+                                                        it,
+                                                        SyncStatus.SYNCED
+                                                )
+                                            }
+                                    )
+                                    .startPushing()
+                        }
+
+                        // 7. Sync Words (Posts)
+                        launch {
+                            PushWordJob(
+                                            isConnected = isConnected,
+                                            getUnsyncedNotes = { db.getUnsyncedWords() },
+                                            updateNoteSyncStatus = { id, _ ->
+                                                db.updateWordSyncStatus(id, SyncStatus.SYNCED)
+                                            }
+                                    )
+                                    .startPushing()
+                        }
                     } catch (e: Exception) {
                         println("Sync error: ${e.message}")
                     }
                 }
     }
 
-    fun pullWordFromServer() {
+    fun pullDataFromServer() {
         activePullSyncJob?.cancel()
         activePullSyncJob =
                 viewModelScope.launch {
                     try {
-                        val pullJob =
-                                PullWordJob(
-                                        isConnected = { isNetworkAvailable(application) },
-                                        saveNotes = { notes ->
-                                            db.upsertWord(notes)
-                                            println("notes saved")
-                                        },
-                                        onSyncComplete = { loadNote() }
-                                )
+                        val isConnected = { isNetworkAvailable(application) }
 
-                        pullJob.startPulling()
+                        // Pull everything concurrently
+                        launch {
+                            PullWordJob(
+                                            isConnected = isConnected,
+                                            saveNotes = { db.upsertWord(it) },
+                                            onSyncComplete = { loadNote() }
+                                    )
+                                    .startPulling()
+                        }
+
+                        launch {
+                            PullTagJob(isConnected = isConnected, saveTags = { db.upsertTags(it) })
+                                    .startPulling()
+                        }
+
+                        launch {
+                            PullCategoryJob(
+                                            isConnected = isConnected,
+                                            saveCategories = { db.upsertCategories(it) }
+                                    )
+                                    .startPulling()
+                        }
+
+                        launch {
+                            PullCommentJob(
+                                            isConnected = isConnected,
+                                            saveComments = { db.upsertComments(it) }
+                                    )
+                                    .startPulling()
+                        }
+
+                        launch {
+                            PullPostCommentJob(
+                                            isConnected = isConnected,
+                                            savePostComments = { db.upsertPostComments(it) }
+                                    )
+                                    .startPulling()
+                        }
+
+                        launch {
+                            PullPostTagJob(
+                                            isConnected = isConnected,
+                                            savePostTags = { db.upsertPostTags(it) }
+                                    )
+                                    .startPulling()
+                        }
+
+                        launch {
+                            PullNoteCategoryJob(
+                                            isConnected = isConnected,
+                                            saveNoteCategories = { db.upsertNoteCategories(it) }
+                                    )
+                                    .startPulling()
+                        }
                     } catch (e: Exception) {
                         println("Sync failed: ${e.message}")
                     }
@@ -759,6 +896,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
             db.updateWordTagsAndCategories(wordId, dbTags, dbCategories)
             loadNoteDetailGeneric(wordId)
+            startWordSync()
         }
     }
 
@@ -768,7 +906,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         // Load tags and categories if needed
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                val db = WordDatabase.getInstance(context)
+                // val db = WordDatabase.getInstance(context)
                 // Load all tags
                 //                val tags = db.getAllTags()
                 //                _allTags.value = tags.map { it.name }
@@ -783,7 +921,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun fetchPosts(context: Context, isRefresh: Boolean = false) {
+    fun fetchPosts(isRefresh: Boolean = false) {
         viewModelScope.launch(Dispatchers.IO) {
             if (isRefresh) {
                 _isRefreshingTimeline.value = true
@@ -791,7 +929,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 _isLoadingTimeline.value = true
             }
             try {
-                val db = WordDatabase.getInstance(context)
+                // val db = WordDatabase.getInstance(context)
                 //                val allPosts = db.getAllPosts()
                 //                _posts.value = allPosts
             } catch (e: Exception) {
@@ -894,25 +1032,26 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun insertTag(context: Context, name: String) {
+    fun insertTag(name: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            val db = WordDatabase.getInstance(context)
+            // val db = WordDatabase.getInstance(context)
             //            db.insertTag(name)
-            loadData(context)
+            loadData(context = application)
         }
     }
 
-    fun insertComment(context: Context, postId: String, comment: Comment) {
+    fun insertComment(postId: String, comment: Comment) {
         viewModelScope.launch(Dispatchers.IO) {
-            val db = WordDatabase.getInstance(context)
             db.insertComment(postId, comment)
             // Refresh post
             //            val updatedPost = db.getPostById(postId)
             //            _currentPost.value = updatedPost
-            fetchPosts(context)
+            fetchPosts()
+            startWordSync()
         }
     }
 
+    /*
     fun updatePostTagsAndCategories(
             context: Context,
             postId: String,
@@ -928,6 +1067,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             fetchPosts(context)
         }
     }
+    */
 
     fun getTagByName(context: Context, name: String): Tag? {
         val db = WordDatabase.getInstance(context)

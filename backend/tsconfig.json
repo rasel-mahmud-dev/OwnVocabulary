@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "outDir": "./build",
+    "baseUrl": "./src",
+    "rootDir": "./src",
+    "allowJs": true,
+    "target": "es6",
+    "skipLibCheck": true,
+    "strict": false,
+    "esModuleInterop": true,
+    "noImplicitAny": false,
+    "module": "commonjs",
+    "resolveJsonModule": true,
+    "isolatedModules": true,
+    "typeRoots": [
+      "./src/types",
+      "./node_modules/@types"
+    ]
+  },
+  "include": ["./src"],
+  "exclude": ["node_modules"]
+}

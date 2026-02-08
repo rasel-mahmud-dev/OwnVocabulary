@@ -490,7 +490,7 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
 
                                         // Save to local database via AppViewModel
                                         withContext(Dispatchers.IO) {
-                                            appViewModel.insertWordComment(context, uid, newComment)
+                                            appViewModel.insertWordComment( uid, newComment)
                                             // Reload details to show new comment
                                             loadNoteDetail(uid)
                                         }
@@ -600,7 +600,7 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                 sentences = generatedExampleSentences,
                 onDismiss = { showExampleDialog = false },
                 onProceed = {
-                    appViewModel.insertMultipleComments(context, uid, generatedExampleSentences)
+                    appViewModel.insertMultipleComments( uid, generatedExampleSentences)
                     showExampleDialog = false
                 }
         )

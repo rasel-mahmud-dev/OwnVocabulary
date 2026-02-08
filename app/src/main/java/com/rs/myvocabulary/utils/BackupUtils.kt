@@ -162,16 +162,16 @@ object BackupUtils {
             val categoriesFile = File(jsonDir, "categories.json")
             if (categoriesFile.exists()) {
                 val type = object : TypeToken<List<Label>>() {}.type
-                val categories: List<Label> = gson.fromJson(categoriesFile.readText(), type)
-                //                db.insertCategories(categories)
+                gson.fromJson<List<Label>>(categoriesFile.readText(), type)
+                // db.insertCategories(categories)
             }
 
             // 4. Restore Tags
             val tagsFile = File(jsonDir, "tags.json")
             if (tagsFile.exists()) {
                 val type = object : TypeToken<List<Tag>>() {}.type
-                val tags: List<Tag> = gson.fromJson(tagsFile.readText(), type)
-                //                db.insertTags(tags)
+                gson.fromJson<List<Tag>>(tagsFile.readText(), type)
+                // db.insertTags(tags)
             }
 
             // 5. Restore Posts (includes comments)

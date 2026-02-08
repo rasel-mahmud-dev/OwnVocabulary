@@ -33,6 +33,22 @@ data class Comment(
         val isDeleted: Boolean = false,
 )
 
+data class PostComment(
+        val id: Int = 0,
+        val uid: String,
+        val postId: String,
+        val userId: String?,
+        val text: String,
+        val audioUrl: String? = null,
+        val mediaUrl: String? = null,
+        val mediaType: String? = null,
+        val attachments: List<CommentAttachment>? = null,
+        val createdAt: Long = System.currentTimeMillis(),
+        val updatedAt: Long = System.currentTimeMillis(),
+        val syncStatus: SyncStatus = SyncStatus.PENDING,
+        val isDeleted: Boolean = false
+)
+
 data class Tag(
         val id: Int = 0,
         val uid: String,
@@ -80,8 +96,9 @@ data class Label(
         val lastSyncAttempt: Long? = null,
         val children: List<Label> = emptyList(),
         var associatedNotes: List<Word> = emptyList(),
-        var associatedNoteCount: Int? = 0,
-        val parentId: String? = null
+        val associatedNoteCount: Int? = 0,
+        val parentId: String? = null,
+        val isDeleted: Boolean = false
 )
 
 data class NoteCategory(
@@ -95,7 +112,14 @@ data class NoteCategory(
         val isDeleted: Boolean = false
 )
 
-data class PostTag(val postId: String, val tagId: String)
+data class PostTag(
+        val uid: String,
+        val postId: String,
+        val tagId: String,
+        val createdAt: Long = System.currentTimeMillis(),
+        val updatedAt: Long = System.currentTimeMillis(),
+        val syncStatus: SyncStatus = SyncStatus.PENDING
+)
 
 data class WordPartial(
         val id: Long = 0,
@@ -112,7 +136,8 @@ data class WordPartial(
         val retryCount: Int? = null,
         val lastSyncAttempt: Long? = null,
         val createdAt: Long? = null,
-        val updatedAt: Long? = null
+        val updatedAt: Long? = null,
+        val isDeleted: Boolean? = null
 )
 
 enum class SyncStatus {
@@ -138,7 +163,7 @@ class WordDatabase private constructor(context: Context) :
     companion object {
         @Volatile private var INSTANCE: WordDatabase? = null
         private const val DATABASE_NAME = "words.db"
-        private const val DATABASE_VERSION = 3
+        private const val DATABASE_VERSION = 4
 
         // Table and column names
         private const val TABLE_NAME = "words"
@@ -214,8 +239,10 @@ class WordDatabase private constructor(context: Context) :
         const val COLUMN_TAG_SYNCED_AT = "synced_at"
 
         const val TABLE_POST_TAGS = "post_tags"
+        const val COLUMN_PT_UID = "uid"
         const val COLUMN_PT_POST_ID = "post_id"
         const val COLUMN_PT_TAG_ID = "tag_id"
+        const val COLUMN_PT_SYNC_STATUS = "sync_status"
 
         fun getInstance(context: Context): WordDatabase {
             return INSTANCE
@@ -329,13 +356,17 @@ class WordDatabase private constructor(context: Context) :
 
         db.execSQL(
                 """
-                 CREATE TABLE IF NOT EXISTS $TABLE_POST_TAGS (
-                     $COLUMN_PT_POST_ID TEXT,
-                     $COLUMN_PT_TAG_ID TEXT,
-                     PRIMARY KEY($COLUMN_PT_POST_ID, $COLUMN_PT_TAG_ID),
-                     FOREIGN KEY($COLUMN_PT_POST_ID) REFERENCES $TABLE_WORDS($COLUMN_UID),
-                     FOREIGN KEY($COLUMN_PT_TAG_ID) REFERENCES $TABLE_TAGS($COLUMN_TAG_UID)
-                 )
+                  CREATE TABLE IF NOT EXISTS $TABLE_POST_TAGS (
+                      $COLUMN_PT_UID TEXT PRIMARY KEY,
+                      $COLUMN_PT_POST_ID TEXT,
+                      $COLUMN_PT_TAG_ID TEXT,
+                      $COLUMN_CREATED_AT INTEGER,
+                      $COLUMN_UPDATED_AT INTEGER,
+                      $COLUMN_PT_SYNC_STATUS TEXT DEFAULT 'PENDING',
+                      UNIQUE($COLUMN_PT_POST_ID, $COLUMN_PT_TAG_ID),
+                      FOREIGN KEY($COLUMN_PT_POST_ID) REFERENCES $TABLE_WORDS($COLUMN_UID),
+                      FOREIGN KEY($COLUMN_PT_TAG_ID) REFERENCES $TABLE_TAGS($COLUMN_TAG_UID)
+                  )
              """.trimIndent()
         )
 
@@ -364,6 +395,20 @@ class WordDatabase private constructor(context: Context) :
     override fun onUpgrade(db: SQLiteDatabase, oldVersion: Int, newVersion: Int) {
         if (oldVersion < 3) {
             onCreate(db)
+        }
+        if (oldVersion < 4) {
+            try {
+                db.execSQL("ALTER TABLE $TABLE_POST_TAGS ADD COLUMN $COLUMN_PT_UID TEXT")
+                db.execSQL(
+                        "ALTER TABLE $TABLE_POST_TAGS ADD COLUMN $COLUMN_PT_SYNC_STATUS TEXT DEFAULT 'PENDING'"
+                )
+                // Populate existing rows with UIDs
+                db.execSQL(
+                        "UPDATE $TABLE_POST_TAGS SET $COLUMN_PT_UID = lower(hex(randomblob(16))) WHERE $COLUMN_PT_UID IS NULL"
+                )
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
         }
     }
 
@@ -493,6 +538,7 @@ class WordDatabase private constructor(context: Context) :
         while (cursor.moveToNext()) {
             list.add(
                     PostTag(
+                            uid = cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_PT_UID)),
                             postId =
                                     cursor.getString(
                                             cursor.getColumnIndexOrThrow(COLUMN_PT_POST_ID)
@@ -1245,6 +1291,7 @@ class WordDatabase private constructor(context: Context) :
                             put(COLUMN_SYNC_STATUS, SyncStatus.SYNCED.name)
                             word.retryCount?.let { put(COLUMN_RETRY_COUNT, it) }
                             word.lastSyncAttempt?.let { put(COLUMN_LAST_SYNC_ATTEMPT, it) }
+                            word.isDeleted?.let { put(COLUMN_IS_DELETED, if (it) 1 else 0) }
 
                             val now = System.currentTimeMillis()
                             if (!exists) {
@@ -1269,6 +1316,187 @@ class WordDatabase private constructor(context: Context) :
             } catch (e: Exception) {
                 Log.e("Database", "Error ending transaction: ${e.message}")
             }
+        }
+    }
+
+    fun upsertTags(tags: List<Tag>) {
+        if (tags.isEmpty()) return
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            tags.forEach { tag ->
+                val values =
+                        ContentValues().apply {
+                            put(COLUMN_TAG_UID, tag.uid)
+                            put(COLUMN_TAG_NAME, tag.name)
+                            put(COLUMN_CREATED_AT, tag.createdAt)
+                            put(COLUMN_UPDATED_AT, tag.updatedAt)
+                            put(COLUMN_TAG_SYNC_STATUS, SyncStatus.SYNCED.name)
+                            put(COLUMN_TAG_IS_DELETED, if (tag.isDeleted) 1 else 0)
+                        }
+                db.insertWithOnConflict(TABLE_TAGS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun upsertCategories(categories: List<Label>) {
+        if (categories.isEmpty()) return
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            categories.forEach { category ->
+                val values =
+                        ContentValues().apply {
+                            put(COLUMN_UID, category.uid)
+                            put(COLUMN_NAME, category.name)
+                            put(COLUMN_COLOR, category.color)
+                            put(COLUMN_CREATED_AT, category.createdAt)
+                            put(COLUMN_UPDATED_AT, category.updatedAt)
+                            put(COLUMN_SYNC_STATUS, SyncStatus.SYNCED.name)
+                            put(COLUMN_IS_DELETED, if (category.isDeleted) 1 else 0)
+                        }
+                db.insertWithOnConflict(
+                        TABLE_CATEGORIES,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun upsertComments(comments: List<Comment>) {
+        if (comments.isEmpty()) return
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            comments.forEach { comment ->
+                val values =
+                        ContentValues().apply {
+                            put(COLUMN_COMMENT_REMOTE_ID, comment._id)
+                            put(COLUMN_COMMENT_USERNAME, comment.username)
+                            put(COLUMN_COMMENT_TEXT, comment.text)
+                            put(COLUMN_COMMENT_AUDIO_URL, comment.audioUrl)
+                            put(COLUMN_COMMENT_MEDIA_URL, comment.mediaUrl)
+                            put(COLUMN_COMMENT_MEDIA_TYPE, comment.mediaType)
+                            put(COLUMN_COMMENT_PARENT_ID, comment.parentId)
+                            put(COLUMN_CREATED_AT, comment.createdAt)
+                            put(COLUMN_UPDATED_AT, comment.updatedAt)
+                            put(COLUMN_SYNC_STATUS, SyncStatus.SYNCED.name)
+                            put(COLUMN_IS_DELETED, if (comment.isDeleted) 1 else 0)
+                            comment.attachments?.let {
+                                put(COLUMN_COMMENT_ATTACHMENTS, Gson().toJson(it))
+                            }
+                        }
+                db.insertWithOnConflict(
+                        TABLE_COMMENTS,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun upsertPostComments(comments: List<PostComment>) {
+        if (comments.isEmpty()) return
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            comments.forEach { comment ->
+                val values =
+                        ContentValues().apply {
+                            put(COLUMN_PC_UID, comment.uid)
+                            put(COLUMN_PC_POST_ID, comment.postId)
+                            put(COLUMN_PC_USER_ID, comment.userId)
+                            put(COLUMN_PC_TEXT, comment.text)
+                            put(COLUMN_PC_AUDIO_URL, comment.audioUrl)
+                            put(COLUMN_PC_MEDIA_URL, comment.mediaUrl)
+                            put(COLUMN_PC_MEDIA_TYPE, comment.mediaType)
+                            put(COLUMN_PC_CREATED_AT, comment.createdAt)
+                            put(COLUMN_PC_UPDATED_AT, comment.updatedAt)
+                            put(COLUMN_PC_SYNC_STATUS, SyncStatus.SYNCED.name)
+                            put(COLUMN_PC_IS_DELETED, if (comment.isDeleted) 1 else 0)
+                            comment.attachments?.let {
+                                put(COLUMN_PC_ATTACHMENTS, Gson().toJson(it))
+                            }
+                        }
+                db.insertWithOnConflict(
+                        TABLE_POST_COMMENTS,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun upsertPostTags(list: List<PostTag>) {
+        if (list.isEmpty()) return
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            list.forEach { item ->
+                val values =
+                        ContentValues().apply {
+                            put(COLUMN_PT_UID, item.uid)
+                            put(COLUMN_PT_POST_ID, item.postId)
+                            put(COLUMN_PT_TAG_ID, item.tagId)
+                            put(COLUMN_CREATED_AT, item.createdAt)
+                            put(COLUMN_UPDATED_AT, item.updatedAt)
+                            put(COLUMN_PT_SYNC_STATUS, SyncStatus.SYNCED.name)
+                        }
+                db.insertWithOnConflict(
+                        TABLE_POST_TAGS,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
+        }
+    }
+
+    fun upsertNoteCategories(list: List<NoteCategory>) {
+        if (list.isEmpty()) return
+        val db = writableDatabase
+        db.beginTransaction()
+        try {
+            list.forEach { item ->
+                val values =
+                        ContentValues().apply {
+                            put(COLUMN_UID, item.uid)
+                            put(COLUMN_CATEGORY_UID, item.categoryUid)
+                            put(COLUMN_ITEM_UID, item.itemUid)
+                            put(COLUMN_CREATED_AT, item.createdAt)
+                            put(COLUMN_UPDATED_AT, item.updatedAt)
+                            put(COLUMN_SYNC_STATUS, SyncStatus.SYNCED.name)
+                            put(COLUMN_IS_DELETED, if (item.isDeleted) 1 else 0)
+                        }
+                db.insertWithOnConflict(
+                        TABLE_NOTE_CATEGORY,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
+            }
+            db.setTransactionSuccessful()
+        } finally {
+            db.endTransaction()
         }
     }
 
@@ -1434,7 +1662,7 @@ class WordDatabase private constructor(context: Context) :
                     word.attachments?.let { put(COLUMN_ATTACHMENTS, Gson().toJson(it)) }
                 }
 
-        return db.insert(TABLE_WORDS, null, values)
+        return db.insertWithOnConflict(TABLE_WORDS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     fun deletePostComment(commentId: String) {
@@ -1489,6 +1717,494 @@ class WordDatabase private constructor(context: Context) :
         }
     }
 
+    suspend fun getUnsyncedTags(): List<Tag> =
+            withContext(Dispatchers.IO) {
+                val tags = mutableListOf<Tag>()
+                val db = readableDatabase
+                db.query(
+                                TABLE_TAGS,
+                                null,
+                                "$COLUMN_TAG_SYNC_STATUS != ?",
+                                arrayOf(SyncStatus.SYNCED.name),
+                                null,
+                                null,
+                                "$COLUMN_CREATED_AT DESC"
+                        )
+                        .use { cursor ->
+                            while (cursor.moveToNext()) {
+                                tags.add(
+                                        Tag(
+                                                id =
+                                                        cursor.getInt(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_TAG_ID
+                                                                )
+                                                        ),
+                                                uid =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_TAG_UID
+                                                                )
+                                                        ),
+                                                name =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_TAG_NAME
+                                                                )
+                                                        ),
+                                                createdAt =
+                                                        cursor.getLong(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_CREATED_AT
+                                                                )
+                                                        ),
+                                                updatedAt =
+                                                        cursor.getLong(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_UPDATED_AT
+                                                                )
+                                                        ),
+                                                syncStatus =
+                                                        try {
+                                                            SyncStatus.valueOf(
+                                                                    cursor.getString(
+                                                                            cursor.getColumnIndexOrThrow(
+                                                                                    COLUMN_TAG_SYNC_STATUS
+                                                                            )
+                                                                    )
+                                                            )
+                                                        } catch (e: Exception) {
+                                                            SyncStatus.PENDING
+                                                        },
+                                                isDeleted =
+                                                        cursor.getInt(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_TAG_IS_DELETED
+                                                                )
+                                                        ) == 1
+                                        )
+                                )
+                            }
+                        }
+                return@withContext tags
+            }
+
+    fun updateTagSyncStatus(
+            uid: String,
+            syncStatus: SyncStatus = SyncStatus.SYNCED,
+            retryCount: Int = 0,
+            callback: (Int) -> Unit = {}
+    ) {
+        executor.execute {
+            val db = writableDatabase
+            val values =
+                    ContentValues().apply {
+                        put(COLUMN_TAG_SYNC_STATUS, syncStatus.name)
+                        put(COLUMN_UPDATED_AT, System.currentTimeMillis())
+                    }
+            val rowsAffected = db.update(TABLE_TAGS, values, "$COLUMN_TAG_UID = ?", arrayOf(uid))
+            callback(rowsAffected)
+        }
+    }
+
+    suspend fun getUnsyncedCategories(): List<Label> =
+            withContext(Dispatchers.IO) {
+                val categories = mutableListOf<Label>()
+                val db = readableDatabase
+                db.query(
+                                TABLE_CATEGORIES,
+                                null,
+                                "$COLUMN_SYNC_STATUS != ?",
+                                arrayOf(SyncStatus.SYNCED.name),
+                                null,
+                                null,
+                                "$COLUMN_CREATED_AT DESC"
+                        )
+                        .use { cursor ->
+                            while (cursor.moveToNext()) {
+                                categories.add(getLabelFromCursor(cursor))
+                            }
+                        }
+                return@withContext categories
+            }
+
+    fun updateCategorySyncStatus(
+            uid: String,
+            syncStatus: SyncStatus = SyncStatus.SYNCED,
+            callback: (Int) -> Unit = {}
+    ) {
+        executor.execute {
+            val db = writableDatabase
+            val values =
+                    ContentValues().apply {
+                        put(COLUMN_SYNC_STATUS, syncStatus.name)
+                        put(COLUMN_UPDATED_AT, System.currentTimeMillis())
+                    }
+            val rowsAffected = db.update(TABLE_CATEGORIES, values, "$COLUMN_UID = ?", arrayOf(uid))
+            callback(rowsAffected)
+        }
+    }
+
+    suspend fun getUnsyncedPostTags(): List<PostTag> =
+            withContext(Dispatchers.IO) {
+                val associations = mutableListOf<PostTag>()
+                val db = readableDatabase
+                db.query(
+                                TABLE_POST_TAGS,
+                                null,
+                                "$COLUMN_PT_SYNC_STATUS != ?",
+                                arrayOf(SyncStatus.SYNCED.name),
+                                null,
+                                null,
+                                null
+                        )
+                        .use { cursor ->
+                            while (cursor.moveToNext()) {
+                                associations.add(
+                                        PostTag(
+                                                uid =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PT_UID
+                                                                )
+                                                        ),
+                                                postId =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PT_POST_ID
+                                                                )
+                                                        ),
+                                                tagId =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PT_TAG_ID
+                                                                )
+                                                        ),
+                                                syncStatus =
+                                                        try {
+                                                            SyncStatus.valueOf(
+                                                                    cursor.getString(
+                                                                            cursor.getColumnIndexOrThrow(
+                                                                                    COLUMN_PT_SYNC_STATUS
+                                                                            )
+                                                                    )
+                                                            )
+                                                        } catch (e: Exception) {
+                                                            SyncStatus.PENDING
+                                                        }
+                                        )
+                                )
+                            }
+                        }
+                return@withContext associations
+            }
+
+    fun updatePostTagSyncStatus(
+            uid: String,
+            syncStatus: SyncStatus = SyncStatus.SYNCED,
+            callback: (Int) -> Unit = {}
+    ) {
+        executor.execute {
+            val db = writableDatabase
+            val values = ContentValues().apply { put(COLUMN_PT_SYNC_STATUS, syncStatus.name) }
+            val rowsAffected =
+                    db.update(TABLE_POST_TAGS, values, "$COLUMN_PT_UID = ?", arrayOf(uid))
+            callback(rowsAffected)
+        }
+    }
+
+    suspend fun getUnsyncedNoteCategories(): List<NoteCategory> =
+            withContext(Dispatchers.IO) {
+                val associations = mutableListOf<NoteCategory>()
+                val db = readableDatabase
+                db.query(
+                                TABLE_NOTE_CATEGORY,
+                                null,
+                                "$COLUMN_SYNC_STATUS != ?",
+                                arrayOf(SyncStatus.SYNCED.name),
+                                null,
+                                null,
+                                "$COLUMN_CREATED_AT DESC"
+                        )
+                        .use { cursor ->
+                            while (cursor.moveToNext()) {
+                                associations.add(
+                                        NoteCategory(
+                                                id =
+                                                        cursor.getInt(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_ID
+                                                                )
+                                                        ),
+                                                uid =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_UID
+                                                                )
+                                                        ),
+                                                categoryUid =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_CATEGORY_UID
+                                                                )
+                                                        ),
+                                                itemUid =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_ITEM_UID
+                                                                )
+                                                        ),
+                                                createdAt =
+                                                        cursor.getLong(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_CREATED_AT
+                                                                )
+                                                        ),
+                                                updatedAt =
+                                                        cursor.getLong(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_UPDATED_AT
+                                                                )
+                                                        ),
+                                                syncStatus =
+                                                        try {
+                                                            SyncStatus.valueOf(
+                                                                    cursor.getString(
+                                                                            cursor.getColumnIndexOrThrow(
+                                                                                    COLUMN_SYNC_STATUS
+                                                                            )
+                                                                    )
+                                                            )
+                                                        } catch (e: Exception) {
+                                                            SyncStatus.PENDING
+                                                        },
+                                                isDeleted =
+                                                        cursor.getInt(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_IS_DELETED
+                                                                )
+                                                        ) == 1
+                                        )
+                                )
+                            }
+                        }
+                return@withContext associations
+            }
+
+    fun updateNoteCategorySyncStatus(
+            uid: String,
+            syncStatus: SyncStatus = SyncStatus.SYNCED,
+            callback: (Int) -> Unit = {}
+    ) {
+        executor.execute {
+            val db = writableDatabase
+            val values =
+                    ContentValues().apply {
+                        put(COLUMN_SYNC_STATUS, syncStatus.name)
+                        put(COLUMN_UPDATED_AT, System.currentTimeMillis())
+                    }
+            val rowsAffected =
+                    db.update(TABLE_NOTE_CATEGORY, values, "$COLUMN_UID = ?", arrayOf(uid))
+            callback(rowsAffected)
+        }
+    }
+
+    suspend fun getUnsyncedComments(): List<Comment> =
+            withContext(Dispatchers.IO) {
+                val comments = mutableListOf<Comment>()
+                val db = readableDatabase
+                db.query(
+                                TABLE_COMMENTS,
+                                null,
+                                "$COLUMN_SYNC_STATUS != ?",
+                                arrayOf(SyncStatus.SYNCED.name),
+                                null,
+                                null,
+                                "$COLUMN_COMMENT_CREATED_AT DESC"
+                        )
+                        .use { cursor ->
+                            while (cursor.moveToNext()) {
+                                comments.add(getCommentFromCursor(cursor))
+                            }
+                        }
+                return@withContext comments
+            }
+
+    fun updateCommentSyncStatus(
+            remoteId: String,
+            syncStatus: SyncStatus = SyncStatus.SYNCED,
+            callback: (Int) -> Unit = {}
+    ) {
+        executor.execute {
+            val db = writableDatabase
+            val values = ContentValues().apply { put(COLUMN_SYNC_STATUS, syncStatus.name) }
+            val rowsAffected =
+                    db.update(
+                            TABLE_COMMENTS,
+                            values,
+                            "$COLUMN_COMMENT_REMOTE_ID = ?",
+                            arrayOf(remoteId)
+                    )
+            callback(rowsAffected)
+        }
+    }
+
+    suspend fun getUnsyncedPostComments(): List<PostComment> =
+            withContext(Dispatchers.IO) {
+                val comments = mutableListOf<PostComment>()
+                val db = readableDatabase
+                db.query(
+                                TABLE_POST_COMMENTS,
+                                null,
+                                "$COLUMN_PC_SYNC_STATUS != ?",
+                                arrayOf(SyncStatus.SYNCED.name),
+                                null,
+                                null,
+                                "$COLUMN_PC_CREATED_AT DESC"
+                        )
+                        .use { cursor ->
+                            while (cursor.moveToNext()) {
+                                comments.add(
+                                        PostComment(
+                                                id =
+                                                        cursor.getInt(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_ID
+                                                                )
+                                                        ),
+                                                uid =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_UID
+                                                                )
+                                                        ),
+                                                postId =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_POST_ID
+                                                                )
+                                                        ),
+                                                userId =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_USER_ID
+                                                                )
+                                                        ),
+                                                text =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_TEXT
+                                                                )
+                                                        ),
+                                                audioUrl =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_AUDIO_URL
+                                                                )
+                                                        ),
+                                                mediaUrl =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_MEDIA_URL
+                                                                )
+                                                        ),
+                                                mediaType =
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_MEDIA_TYPE
+                                                                )
+                                                        ),
+                                                attachments =
+                                                        try {
+                                                            val jsonString =
+                                                                    cursor.getString(
+                                                                            cursor.getColumnIndexOrThrow(
+                                                                                    COLUMN_PC_ATTACHMENTS
+                                                                            )
+                                                                    )
+                                                            if (!jsonString.isNullOrEmpty()) {
+                                                                val jsonArray =
+                                                                        JSONArray(jsonString)
+                                                                val list =
+                                                                        mutableListOf<
+                                                                                CommentAttachment>()
+                                                                for (i in
+                                                                        0 until
+                                                                                jsonArray
+                                                                                        .length()) {
+                                                                    val obj =
+                                                                            jsonArray.getJSONObject(
+                                                                                    i
+                                                                            )
+                                                                    list.add(
+                                                                            CommentAttachment(
+                                                                                    url =
+                                                                                            obj.getString(
+                                                                                                    "url"
+                                                                                            ),
+                                                                                    type =
+                                                                                            obj.getString(
+                                                                                                    "type"
+                                                                                            )
+                                                                            )
+                                                                    )
+                                                                }
+                                                                list
+                                                            } else null
+                                                        } catch (e: Exception) {
+                                                            null
+                                                        },
+                                                createdAt =
+                                                        cursor.getLong(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_CREATED_AT
+                                                                )
+                                                        ),
+                                                updatedAt =
+                                                        cursor.getLong(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_UPDATED_AT
+                                                                )
+                                                        ),
+                                                syncStatus =
+                                                        try {
+                                                            SyncStatus.valueOf(
+                                                                    cursor.getString(
+                                                                            cursor.getColumnIndexOrThrow(
+                                                                                    COLUMN_PC_SYNC_STATUS
+                                                                            )
+                                                                    )
+                                                            )
+                                                        } catch (e: Exception) {
+                                                            SyncStatus.PENDING
+                                                        },
+                                                isDeleted =
+                                                        cursor.getInt(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_PC_IS_DELETED
+                                                                )
+                                                        ) == 1
+                                        )
+                                )
+                            }
+                        }
+                return@withContext comments
+            }
+
+    fun updatePostCommentSyncStatus(
+            uid: String,
+            syncStatus: SyncStatus = SyncStatus.SYNCED,
+            callback: (Int) -> Unit = {}
+    ) {
+        executor.execute {
+            val db = writableDatabase
+            val values = ContentValues().apply { put(COLUMN_PC_SYNC_STATUS, syncStatus.name) }
+            val rowsAffected =
+                    db.update(TABLE_POST_COMMENTS, values, "$COLUMN_PC_UID = ?", arrayOf(uid))
+            callback(rowsAffected)
+        }
+    }
+
     suspend fun deleteWord(uid: String): Int =
             withContext(Dispatchers.IO) {
                 val db = writableDatabase
@@ -1525,7 +2241,7 @@ class WordDatabase private constructor(context: Context) :
                 db.query(
                         TABLE_TAGS,
                         null,
-                        "$COLUMN_TAG_NAME = ? AND $COLUMN_TAG_IS_DELETED = 0",
+                        "$COLUMN_TAG_NAME = ? COLLATE NOCASE AND ($COLUMN_TAG_IS_DELETED IS NULL OR $COLUMN_TAG_IS_DELETED = 0)",
                         arrayOf(name),
                         null,
                         null,
@@ -1565,7 +2281,7 @@ class WordDatabase private constructor(context: Context) :
                 db.query(
                         TABLE_CATEGORIES,
                         null,
-                        "$COLUMN_NAME = ? AND ($COLUMN_IS_DELETED IS NULL OR $COLUMN_IS_DELETED = 0)",
+                        "$COLUMN_NAME = ? COLLATE NOCASE AND ($COLUMN_IS_DELETED IS NULL OR $COLUMN_IS_DELETED = 0)",
                         arrayOf(name),
                         null,
                         null,
@@ -1583,14 +2299,14 @@ class WordDatabase private constructor(context: Context) :
         val db = writableDatabase
         val values =
                 ContentValues().apply {
-                    put(COLUMN_TAG_UID, tag.id)
+                    put(COLUMN_TAG_UID, tag.uid)
                     put(COLUMN_TAG_NAME, tag.name)
                     put(COLUMN_CREATED_AT, tag.createdAt)
                     put(COLUMN_UPDATED_AT, tag.updatedAt)
                     put(COLUMN_TAG_SYNC_STATUS, tag.syncStatus.name)
                     put(COLUMN_TAG_IS_DELETED, if (tag.isDeleted) 1 else 0)
                 }
-        db.insert(TABLE_TAGS, null, values)
+        db.insertWithOnConflict(TABLE_TAGS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     fun insertCategory(label: Label) {
@@ -1605,7 +2321,7 @@ class WordDatabase private constructor(context: Context) :
                     put(COLUMN_SYNC_STATUS, label.syncStatus.name)
                     put(COLUMN_IS_DELETED, 0)
                 }
-        db.insert(TABLE_CATEGORIES, null, values)
+        db.insertWithOnConflict(TABLE_CATEGORIES, null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     fun insertComment(postId: String, comment: Comment) {
@@ -1633,7 +2349,7 @@ class WordDatabase private constructor(context: Context) :
                         put(COLUMN_COMMENT_ATTACHMENTS, jsonArray.toString())
                     }
                 }
-        db.insert(TABLE_COMMENTS, null, values)
+        db.insertWithOnConflict(TABLE_COMMENTS, null, values, SQLiteDatabase.CONFLICT_REPLACE)
     }
 
     fun getCommentsForPost(postId: String): List<Comment> {
@@ -1708,7 +2424,7 @@ class WordDatabase private constructor(context: Context) :
             tags.forEach { tag ->
                 // Ensure tag exists
                 val validTag = getTagByName(tag.name)
-                val tagUid = validTag?.id ?: tag.id
+                val tagUid = validTag?.uid ?: tag.uid
                 if (validTag == null) {
                     insertTag(tag)
                 }
@@ -1716,10 +2432,17 @@ class WordDatabase private constructor(context: Context) :
                 // Insert association
                 val values =
                         ContentValues().apply {
+                            put(COLUMN_PT_UID, UUID.randomUUID().toString())
                             put(COLUMN_PT_POST_ID, wordId)
                             put(COLUMN_PT_TAG_ID, tagUid)
+                            put(COLUMN_PT_SYNC_STATUS, SyncStatus.PENDING.name)
                         }
-                db.insert(TABLE_POST_TAGS, null, values)
+                db.insertWithOnConflict(
+                        TABLE_POST_TAGS,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
             }
 
             // Update Categories
@@ -1746,7 +2469,12 @@ class WordDatabase private constructor(context: Context) :
                             put(COLUMN_SYNC_STATUS, SyncStatus.PENDING.name)
                             put(COLUMN_IS_DELETED, 0)
                         }
-                db.insert(TABLE_NOTE_CATEGORY, null, values)
+                db.insertWithOnConflict(
+                        TABLE_NOTE_CATEGORY,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
             }
 
             db.setTransactionSuccessful()

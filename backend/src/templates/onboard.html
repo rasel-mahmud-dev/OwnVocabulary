@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email-Safe QR Code Template</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .email-container {
+            background-color: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .qr-section {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background-color: #f8f9fa;
+            border-radius: 8px;
+        }
+        .qr-code {
+            max-width: 200px;
+            height: auto;
+            margin: 20px 0;
+            border: 2px solid #dee2e6;
+            padding: 10px;
+            background-color: white;
+        }
+        .fallback-code {
+            background-color: #e9ecef;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            letter-spacing: 2px;
+            margin: 20px 0;
+            word-break: break-all;
+        }
+        .instructions {
+            background-color: #d4edda;
+            border: 1px solid #c3e6cb;
+            border-radius: 4px;
+            padding: 15px;
+            margin: 20px 0;
+        }
+        .button {
+            display: inline-block;
+            background-color: #007bff;
+            color: white;
+            text-decoration: none;
+            padding: 12px 24px;
+            border-radius: 4px;
+            margin: 10px 5px;
+        }
+        .warning {
+            background-color: #fff3cd;
+            border: 1px solid #ffeaa7;
+            color: #856404;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+<div class="email-container">
+    <div class="header">
+        <h1>🔐 Setup Two-Factor Authentication</h1>
+        <p>Secure your account with 2FA</p>
+    </div>
+
+    <div class="instructions">
+        <h3>📱 Setup Instructions:</h3>
+        <ol>
+            <li>Download an authenticator app (Google Authenticator, Authy, Microsoft Authenticator)</li>
+            <li>Open the app and tap "Add Account" or "+"</li>
+            <li>Choose "Scan QR Code" and scan the code below</li>
+            <li>If scanning doesn't work, manually enter the secret key</li>
+            <li>Enter the 6-digit code to complete setup</li>
+        </ol>
+    </div>
+
+    <div class="qr-section">
+        <h3>Scan QR Code</h3>
+        <img class="qr-code"
+             src="{{QR_CODE}}"
+             alt="2FA QR Code 2">
+    </div>
+
+    <p>If you can't scan the QR code, manually enter this secret key in your authenticator app:</p>
+    <div class="fallback-code">
+        JBSWY3DPEHPK3PXP
+    </div>
+    <small>Account: your-app@company.com</small><br>
+    <small>Type: Time-based</small>
+
+    <div style="text-align: center; margin: 30px 0;">
+        <a href="https://your-website.com/setup-2fa" class="button">Complete Setup Online</a>
+        <a href="https://your-website.com/help/2fa" class="button" style="background-color: #6c757d;">Need Help?</a>
+    </div>
+
+    <div style="color: #666; font-size: 12px; text-align: center; margin-top: 30px; border-top: 1px solid #dee2e6; padding-top: 20px;">
+        <p>This email was sent to secure your account. If you didn't request this, please contact support.</p>
+        <p>© 2024 Your Company Name. All rights reserved.</p>
+    </div>
+</div>
+</body>
+</html>

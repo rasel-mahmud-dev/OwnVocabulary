@@ -41,11 +41,11 @@ class MainActivity : ComponentActivity() {
             val navController = rememberNavController()
 
             viewModel.startWordSync()
-            viewModel.pullWordFromServer()
+            viewModel.pullDataFromServer()
 
             OwnVocabularyTheme {
                 Surface(modifier = Modifier.fillMaxSize()) {
-                    NavHost(navController = navController, startDestination = "backup") {
+                    NavHost(navController = navController, startDestination = "main") {
                         composable("main") {
                             MainScreen(appViewModel = viewModel, navController = navController)
                         }

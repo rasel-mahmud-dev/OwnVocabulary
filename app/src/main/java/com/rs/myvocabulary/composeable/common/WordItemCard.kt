@@ -68,7 +68,7 @@ fun WordItemCard(
                     }
 
                     Text(
-                            text = word.word,
+                            text = word.word  + "  (" + word.syncStatus,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
