@@ -133,10 +133,12 @@ class WordDatabase private constructor(context: Context) :
         companion object {
                 @Volatile private var INSTANCE: WordDatabase? = null
                 private const val DATABASE_NAME = "words.db"
-                private const val DATABASE_VERSION = 5
+                private const val DATABASE_VERSION = 6
 
                 // Table and column names
                 private const val TABLE_WORDS = "words"
+                private const val TABLE_CATEGORIES = "categories" // New table
+
                 private const val COLUMN_ID = "id"
                 private const val COLUMN_UID = "uid"
                 private const val COLUMN_UPDATE_UID = "update_uid"
@@ -156,6 +158,10 @@ class WordDatabase private constructor(context: Context) :
                 private const val COLUMN_SYNC_STATUS = "sync_status"
                 private const val COLUMN_RETRY_COUNT = "retry_count"
                 private const val COLUMN_LAST_SYNC_ATTEMPT = "last_sync_attempt"
+
+                // Categories Table Columns
+                private const val COLUMN_NAME = "name"
+                private const val COLUMN_COLOR = "color"
 
                 const val COLUMN_ATTACHMENTS = "attachments"
                 const val COLUMN_CATEGORIES_JSON = "categories_json"
@@ -202,6 +208,21 @@ class WordDatabase private constructor(context: Context) :
                 $COLUMN_SYNC_STATUS TEXT DEFAULT 'PENDING',
                 $COLUMN_RETRY_COUNT INTEGER DEFAULT 0,
                 $COLUMN_LAST_SYNC_ATTEMPT INTEGER
+            )
+        """.trimIndent()
+                )
+
+                db.execSQL(
+                        """
+            CREATE TABLE IF NOT EXISTS $TABLE_CATEGORIES (
+                $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                $COLUMN_UID TEXT UNIQUE NOT NULL,
+                $COLUMN_NAME TEXT NOT NULL,
+                $COLUMN_COLOR TEXT DEFAULT '#FF0000',
+                $COLUMN_CREATED_AT INTEGER NOT NULL,
+                $COLUMN_UPDATED_AT INTEGER NOT NULL,
+                $COLUMN_IS_DELETED INTEGER DEFAULT 0,
+                $COLUMN_SYNC_STATUS TEXT DEFAULT 'PENDING'
             )
         """.trimIndent()
                 )
@@ -462,6 +483,28 @@ class WordDatabase private constructor(context: Context) :
                                 e.printStackTrace()
                         }
                 }
+
+                if (oldVersion < 6) {
+                        try {
+                                db.execSQL(
+                                        """
+                    CREATE TABLE IF NOT EXISTS $TABLE_CATEGORIES (
+                        $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                        $COLUMN_UID TEXT UNIQUE NOT NULL,
+                        $COLUMN_NAME TEXT NOT NULL,
+                        $COLUMN_COLOR TEXT DEFAULT '#FF0000',
+                        $COLUMN_CREATED_AT INTEGER NOT NULL,
+                        $COLUMN_UPDATED_AT INTEGER NOT NULL,
+                        $COLUMN_IS_DELETED INTEGER DEFAULT 0,
+                        $COLUMN_SYNC_STATUS TEXT DEFAULT 'PENDING'
+                    )
+                """.trimIndent()
+                                )
+                        } catch (e: Exception) {
+                                Log.e("Database", "Migration to version 6 failed", e)
+                                e.printStackTrace()
+                        }
+                }
         }
 
         // FOR BACKUP/RESTORE
@@ -485,6 +528,91 @@ class WordDatabase private constructor(context: Context) :
                 } finally {
                         db.endTransaction()
                 }
+        }
+
+        // CATEGORIES OPERATIONS
+
+        fun insertCategory(category: Label): Long {
+                val db = writableDatabase
+                val values =
+                        ContentValues().apply {
+                                put(COLUMN_UID, category.uid)
+                                put(COLUMN_NAME, category.name)
+                                put(COLUMN_COLOR, category.color)
+                                put(COLUMN_CREATED_AT, category.createdAt)
+                                put(COLUMN_UPDATED_AT, category.updatedAt)
+                                put(COLUMN_IS_DELETED, if (category.isDeleted) 1 else 0)
+                                put(COLUMN_SYNC_STATUS, category.syncStatus.name)
+                        }
+                return db.insertWithOnConflict(
+                        TABLE_CATEGORIES,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_REPLACE
+                )
+        }
+
+        fun getAllCategories(): List<Label> {
+                val categories = mutableListOf<Label>()
+                val db = readableDatabase
+                val cursor =
+                        db.query(
+                                TABLE_CATEGORIES,
+                                null,
+                                "$COLUMN_IS_DELETED = 0",
+                                null,
+                                null,
+                                null,
+                                "$COLUMN_NAME ASC"
+                        )
+
+                while (cursor.moveToNext()) {
+                        categories.add(
+                                Label(
+                                        id = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_ID)),
+                                        uid =
+                                                cursor.getString(
+                                                        cursor.getColumnIndexOrThrow(COLUMN_UID)
+                                                ),
+                                        name =
+                                                cursor.getString(
+                                                        cursor.getColumnIndexOrThrow(COLUMN_NAME)
+                                                ),
+                                        color =
+                                                cursor.getString(
+                                                        cursor.getColumnIndexOrThrow(COLUMN_COLOR)
+                                                ),
+                                        createdAt =
+                                                cursor.getLong(
+                                                        cursor.getColumnIndexOrThrow(
+                                                                COLUMN_CREATED_AT
+                                                        )
+                                                ),
+                                        updatedAt =
+                                                cursor.getLong(
+                                                        cursor.getColumnIndexOrThrow(
+                                                                COLUMN_UPDATED_AT
+                                                        )
+                                                ),
+                                        isDeleted =
+                                                cursor.getInt(
+                                                        cursor.getColumnIndexOrThrow(
+                                                                COLUMN_IS_DELETED
+                                                        )
+                                                ) == 1,
+                                        syncStatus =
+                                                SyncStatus.valueOf(
+                                                        cursor.getString(
+                                                                cursor.getColumnIndexOrThrow(
+                                                                        COLUMN_SYNC_STATUS
+                                                                )
+                                                        )
+                                                )
+                                )
+                        )
+                }
+                cursor.close()
+                return categories
         }
 
         // FOR BACKUP/RESTORE
@@ -1333,6 +1461,19 @@ class WordDatabase private constructor(context: Context) :
                                                 put(COLUMN_LAST_SYNC_ATTEMPT, it)
                                         }
 
+                                        partialWord.categories?.let { categories ->
+                                                // Ensure categories are in master table
+                                                categories.forEach { insertCategory(it) }
+                                                put(
+                                                        COLUMN_CATEGORIES_JSON,
+                                                        Gson().toJson(categories)
+                                                )
+                                        }
+
+                                        partialWord.tags?.let { tags ->
+                                                put(COLUMN_TAGS_JSON, Gson().toJson(tags))
+                                        }
+
                                         // Always update these fields
                                         put(COLUMN_UPDATED_AT, System.currentTimeMillis())
                                 }
@@ -1574,6 +1715,10 @@ class WordDatabase private constructor(context: Context) :
 
         fun updateWordTagsAndCategories(wordUid: String, tags: List<Tag>, categories: List<Label>) {
                 val db = writableDatabase
+
+                // Ensure all categories are inserted/updated in the master table
+                categories.forEach { insertCategory(it) }
+
                 val values =
                         ContentValues().apply {
                                 put(COLUMN_TAGS_JSON, Gson().toJson(tags))

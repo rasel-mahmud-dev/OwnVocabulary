@@ -7,11 +7,9 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.*
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
@@ -21,8 +19,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -52,10 +48,9 @@ fun CreatePostScreen(
         val context = LocalContext.current
         val scope = rememberCoroutineScope()
 
-   val isUploading by viewModel.isUploading.collectAsState()
+        val isUploading by viewModel.isUploading.collectAsState()
 
         LaunchedEffect(Unit) { viewModel.loadData(context) }
-
 
         // Data States
         val selectedTags = remember {
@@ -72,6 +67,12 @@ fun CreatePostScreen(
                                 ?.let { addAll(it) }
                 }
         }
+
+        // Post Type State
+        var selectedType by remember { mutableStateOf(postToEdit?.type ?: "word") }
+        val types = listOf("word", "clause", "docs")
+        var wordText by remember { mutableStateOf(postToEdit?.word ?: "") }
+        var shortMeaning by remember { mutableStateOf(postToEdit?.shortMeaning ?: "") }
 
         // Character counter
         val maxChars = 50000
@@ -90,8 +91,6 @@ fun CreatePostScreen(
                                         )
                                 )
                         }
-
-
                 }
         }
         var showMediaOptions by remember { mutableStateOf(false) }
@@ -180,6 +179,9 @@ fun CreatePostScreen(
                                                                         selectedTags.toList(),
                                                                 selectedCategories =
                                                                         selectedCategories.toList(),
+                                                                type = selectedType,
+                                                                word = wordText,
+                                                                shortMeaning = shortMeaning,
                                                                 onSuccess = {
                                                                         Toast.makeText(
                                                                                         context,
@@ -231,7 +233,12 @@ fun CreatePostScreen(
                         Column(modifier = Modifier.fillMaxWidth().imePadding()) {
                                 HorizontalDivider()
                                 Row(
-                                        modifier = Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 12.dp),
+                                        modifier =
+                                                Modifier.fillMaxWidth()
+                                                        .padding(
+                                                                horizontal = 8.dp,
+                                                                vertical = 12.dp
+                                                        ),
                                         horizontalArrangement = Arrangement.SpaceBetween,
                                         verticalAlignment = Alignment.CenterVertically
                                 ) {
@@ -303,6 +310,66 @@ fun CreatePostScreen(
         ) { padding ->
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
+                        // Type Selection Tabs
+                        TabRow(selectedTabIndex = types.indexOf(selectedType)) {
+                                types.forEach { type ->
+                                        Tab(
+                                                selected = selectedType == type,
+                                                onClick = { selectedType = type },
+                                                text = {
+                                                        Text(
+                                                                type.replaceFirstChar {
+                                                                        if (it.isLowerCase())
+                                                                                it.titlecase(
+                                                                                        java.util
+                                                                                                .Locale
+                                                                                                .getDefault()
+                                                                                )
+                                                                        else it.toString()
+                                                                }
+                                                        )
+                                                }
+                                        )
+                                }
+                        }
+
+                        // Short Meaning Input (for Word and Clause)
+                        if (selectedType == "word" || selectedType == "clause") {
+                                OutlinedTextField(
+                                        value = wordText,
+                                        onValueChange = { wordText = it },
+                                        label = { Text("Word") },
+                                        modifier =
+                                                Modifier.fillMaxWidth()
+                                                        .padding(
+                                                                horizontal = 16.dp,
+                                                                vertical = 8.dp
+                                                        ),
+                                        colors =
+                                                TextFieldDefaults.colors(
+                                                        focusedContainerColor = Color.Transparent,
+                                                        unfocusedContainerColor = Color.Transparent,
+                                                        disabledContainerColor = Color.Transparent,
+                                                )
+                                )
+                                OutlinedTextField(
+                                        value = shortMeaning,
+                                        onValueChange = { shortMeaning = it },
+                                        label = { Text("Short Meaning") },
+                                        modifier =
+                                                Modifier.fillMaxWidth()
+                                                        .padding(
+                                                                horizontal = 16.dp,
+                                                                vertical = 8.dp
+                                                        ),
+                                        colors =
+                                                TextFieldDefaults.colors(
+                                                        focusedContainerColor = Color.Transparent,
+                                                        unfocusedContainerColor = Color.Transparent,
+                                                        disabledContainerColor = Color.Transparent,
+                                                )
+                                )
+                        }
 
                         // Text Input Area
                         TextField(
@@ -331,8 +398,6 @@ fun CreatePostScreen(
                                         ),
                                 textStyle = MaterialTheme.typography.bodyLarge
                         )
-
-
 
                         // Media Preview Section
                         AnimatedVisibility(
@@ -421,10 +486,7 @@ fun CreatePostScreen(
                                                 if (charsRemaining < 50) Color(0xFFE53935)
                                                 else MaterialTheme.colorScheme.onSurfaceVariant,
                                         modifier =
-                                                Modifier.padding(
-                                                        horizontal = 8.dp,
-                                                        vertical = 4.dp
-                                                )
+                                                Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                                 )
                         }
 
@@ -447,7 +509,5 @@ fun CreatePostScreen(
                                 }
                         )
                 }
-
-
         }
 }

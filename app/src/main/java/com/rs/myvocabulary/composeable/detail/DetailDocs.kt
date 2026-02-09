@@ -14,6 +14,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ChevronLeft
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material3.*
@@ -55,7 +56,12 @@ import kotlinx.coroutines.withContext
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 @Composable
-fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
+fun DetailDocs(
+        uid: String,
+        appViewModel: AppViewModel,
+        onBack: () -> Unit,
+        onOpenDrawer: () -> Unit = {}
+) {
     var noteDetail by remember { mutableStateOf<Word?>(null) }
     var title by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
@@ -93,6 +99,7 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
     val enhancedWord by appViewModel.enhancedWord.collectAsState()
     val enhancedShortMeaning by appViewModel.enhancedShortMeaning.collectAsState()
     val enhancedDetails by appViewModel.enhancedDetails.collectAsState()
+    val enhancedCategories by appViewModel.enhancedCategories.collectAsState()
 
     // Permission launcher
     val permissionLauncher =
@@ -192,8 +199,6 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
         }
     }
 
-    println("innerPadding ${noteDetail}")
-
     Scaffold(
             topBar = {
                 TopAppBar(
@@ -219,6 +224,10 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                                         Icon(Icons.Default.Save, contentDescription = "Save")
                                     }
                                 }
+                            }
+
+                            IconButton(onClick = onOpenDrawer) {
+                                Icon(Icons.Default.Menu, contentDescription = "Menu")
                             }
 
                             IconButton(onClick = { showMenu = true }) {
@@ -630,9 +639,10 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                 enhancedWord = enhancedWord,
                 enhancedShortMeaning = enhancedShortMeaning,
                 enhancedDetails = enhancedDetails,
+                enhancedCategories = enhancedCategories,
                 onDismiss = { showAiEnhancementDialog = false },
-                onProceed = { word, meaning, details ->
-                    appViewModel.applyAiPostEnhancement(uid, word, meaning, details)
+                onProceed = { word, meaning, details, categories ->
+                    appViewModel.applyAiPostEnhancement(uid, word, meaning, details, categories)
                     showAiEnhancementDialog = false
                 }
         )

@@ -150,6 +150,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _enhancedDetails = MutableStateFlow("")
     val enhancedDetails: StateFlow<String> = _enhancedDetails.asStateFlow()
 
+    private val _enhancedCategories = MutableStateFlow<List<String>>(emptyList())
+    val enhancedCategories: StateFlow<List<String>> = _enhancedCategories.asStateFlow()
+
     // Backup Files State
     private val _backupFiles = MutableStateFlow<List<File>>(emptyList())
     val backupFiles: StateFlow<List<File>> = _backupFiles.asStateFlow()
@@ -159,8 +162,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val allTags: StateFlow<List<String>> = _allTags.asStateFlow()
 
     // All Categories State
-    private val _allCategories = MutableStateFlow<List<Map<String, String>>>(emptyList())
-    val allCategories: StateFlow<List<Map<String, String>>> = _allCategories.asStateFlow()
+    private val _allCategories = MutableStateFlow<List<Label>>(emptyList())
+    val allCategories: StateFlow<List<Label>> = _allCategories.asStateFlow()
 
     // Add Word Dialog State
     private val _openAddWordDialog = MutableStateFlow<Boolean>(false)
@@ -205,6 +208,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     init {
         loadAuth()
+        loadCategories()
     }
 
     // ========== WORD LOADING FUNCTIONS ==========
@@ -285,6 +289,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 offset = offset,
                 isFav = false,
         ) { newNotes -> viewModelScope.launch { handleAllItemsLoaded(newNotes, more) } }
+    }
+
+    fun loadCategories() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val cats = db.getAllCategories()
+            _allCategories.value = cats
+        }
     }
 
     fun loadDocs() {
@@ -801,11 +812,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     >  * Write a Bengali paragraph summarizing the text, but replace the selected keywords with their English equivalents (Capitalize the first letter of these English words).
                     >  * The flow should be natural so that a Bengali speaker can understand the meaning of those English words through context.
                     >  * At the end, provide a 'Vocabulary List' (not in a table) using bullet points. Each point should include: The English Word — Bengali Meaning: A short English definition/context."
+                    >  * Also suggest 3-5 relevant categories for this text.
                     
                     Text:
                     ${word.details}
                     
-                    format the output as a valid JSON object with a single field 'details' containing the rewritten text.
+                    format the output as a valid JSON object with:
+                    - 'details': the rewritten text.
+                    - 'categories': a list of strings for suggested categories.
                 """.trimIndent()
 
                 val response = aiHelper.generateContent(prompt)
@@ -824,6 +838,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     _enhancedWord.value = word.word
                     _enhancedShortMeaning.value = word.shortMeaning
                     _enhancedDetails.value = json.optString("details", "")
+
+                    val catsArray = json.optJSONArray("categories")
+                    val cats = mutableListOf<String>()
+                    if (catsArray != null) {
+                        for (i in 0 until catsArray.length()) {
+                            cats.add(catsArray.getString(i))
+                        }
+                    }
+                    _enhancedCategories.value = cats
+
                     onComplete()
                 }
             } catch (e: Exception) {
@@ -834,15 +858,31 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun applyAiPostEnhancement(uid: String, word: String, shortMeaning: String, details: String) {
+    fun applyAiPostEnhancement(
+            uid: String,
+            word: String,
+            shortMeaning: String,
+            details: String,
+            categories: List<String>
+    ) {
         viewModelScope.launch {
             try {
+                val dbCategories: List<Label> =
+                        categories.map { catName ->
+                            Label(
+                                    uid = UUID.randomUUID().toString(),
+                                    name = catName,
+                                    color = "#FF0000"
+                            )
+                        }
+
                 db.updatePartial(
                         WordPartial(
                                 uid = uid,
                                 word = word,
                                 shortMeaning = shortMeaning,
                                 details = details,
+                                categories = dbCategories,
                                 syncStatus = SyncStatus.PENDING
                         )
                 )
@@ -930,10 +970,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun createPost(
             context: Context,
-            textContent: String,
+            textContent: String, /* details */
             attachments: List<PostAttachment>,
             selectedTags: List<String>,
             selectedCategories: List<Map<String, String>>,
+            type: String = "word",
+            word: String = "", /* word/title */
+            shortMeaning: String = "",
             onSuccess: () -> Unit,
             onError: (String) -> Unit
     ) {
@@ -987,9 +1030,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 // 3. Create Word object
                 val newWord =
                         Word(
-                                word = textContent.take(50), // Use first 50 chars as title/word
+                                word =
+                                        if (word.isNotBlank()) word
+                                        else
+                                                textContent.take(
+                                                        50
+                                                ), // Use first 50 chars as title/word
                                 details = textContent,
-                                type = "word", // Default type for posts
+                                type = type,
+                                shortMeaning = shortMeaning,
                                 userId = "1", // Updated in actual app
                                 attachments =
                                         if (savedAttachments.isNotEmpty()) savedAttachments

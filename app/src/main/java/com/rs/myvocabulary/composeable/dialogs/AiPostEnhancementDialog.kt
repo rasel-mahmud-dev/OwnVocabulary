@@ -26,60 +26,87 @@ fun AiPostEnhancementDialog(
         enhancedWord: String,
         enhancedShortMeaning: String,
         enhancedDetails: String,
+        enhancedCategories: List<String>,
         onDismiss: () -> Unit,
-        onProceed: (word: String, meaning: String, details: String) -> Unit
+        onProceed:
+                (word: String, meaning: String, details: String, categories: List<String>) -> Unit
 ) {
-    var editableWord by remember { mutableStateOf(enhancedWord) }
-    var editableMeaning by remember { mutableStateOf(enhancedShortMeaning) }
-    var editableDetails by remember { mutableStateOf(enhancedDetails) }
+        var editableWord by remember { mutableStateOf(enhancedWord) }
+        var editableMeaning by remember { mutableStateOf(enhancedShortMeaning) }
+        var editableDetails by remember { mutableStateOf(enhancedDetails) }
+        var editableCategories by remember { mutableStateOf(enhancedCategories.joinToString(", ")) }
 
-    AlertDialog(
-            onDismissRequest = onDismiss,
-            title = { Text("AI Post Enhancement") },
-            text = {
-                Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                    Text(
-                            "Enhanced Word:",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                    )
-                    OutlinedTextField(
-                            value = editableWord,
-                            onValueChange = { editableWord = it },
-                            modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+        AlertDialog(
+                onDismissRequest = onDismiss,
+                title = { Text("AI Post Enhancement") },
+                text = {
+                        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                                Text(
+                                        "Enhanced Word:",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold
+                                )
+                                OutlinedTextField(
+                                        value = editableWord,
+                                        onValueChange = { editableWord = it },
+                                        modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                            "Enhanced Short Meaning:",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                    )
-                    OutlinedTextField(
-                            value = editableMeaning,
-                            onValueChange = { editableMeaning = it },
-                            modifier = Modifier.fillMaxWidth()
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
+                                Text(
+                                        "Enhanced Short Meaning:",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold
+                                )
+                                OutlinedTextField(
+                                        value = editableMeaning,
+                                        onValueChange = { editableMeaning = it },
+                                        modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
 
-                    Text(
-                            "Enhanced Details:",
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold
-                    )
-                    OutlinedTextField(
-                            value = editableDetails,
-                            onValueChange = { editableDetails = it },
-                            modifier = Modifier.fillMaxWidth(),
-                            minLines = 3
-                    )
-                }
-            },
-            confirmButton = {
-                Button(onClick = { onProceed(editableWord, editableMeaning, editableDetails) }) {
-                    Text("Apply Changes")
-                }
-            },
-            dismissButton = { TextButton(onClick = onDismiss) { Text("Discard") } }
-    )
+                                Text(
+                                        "Enhanced Categories (comma separated):",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold
+                                )
+                                OutlinedTextField(
+                                        value = editableCategories,
+                                        onValueChange = { editableCategories = it },
+                                        modifier = Modifier.fillMaxWidth()
+                                )
+                                Spacer(modifier = Modifier.height(16.dp))
+
+                                Text(
+                                        "Enhanced Details:",
+                                        style = MaterialTheme.typography.labelLarge,
+                                        fontWeight = FontWeight.Bold
+                                )
+                                OutlinedTextField(
+                                        value = editableDetails,
+                                        onValueChange = { editableDetails = it },
+                                        modifier = Modifier.fillMaxWidth(),
+                                        minLines = 3
+                                )
+                        }
+                },
+                confirmButton = {
+                        Button(
+                                onClick = {
+                                        val categoriesList =
+                                                editableCategories
+                                                        .split(",")
+                                                        .map { it.trim() }
+                                                        .filter { it.isNotEmpty() }
+                                        onProceed(
+                                                editableWord,
+                                                editableMeaning,
+                                                editableDetails,
+                                                categoriesList
+                                        )
+                                }
+                        ) { Text("Apply Changes") }
+                },
+                dismissButton = { TextButton(onClick = onDismiss) { Text("Discard") } }
+        )
 }
