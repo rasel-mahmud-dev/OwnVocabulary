@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.rs.myvocabulary.composeable.QuickWordView
 import com.rs.myvocabulary.composeable.detail.DetailDocs
+import com.rs.myvocabulary.composeable.dialogs.AddCategoryDialog
 import com.rs.myvocabulary.composeable.docs.CreateDiary
 import com.rs.myvocabulary.composeable.docs.DocsScreen
 import com.rs.myvocabulary.composeable.drawer.AppDrawer
@@ -36,6 +37,7 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
 
     // Overlay states
     var editingWordUid by remember { mutableStateOf<String?>(null) }
+    var showAddCategoryDialog by remember { mutableStateOf(false) }
     var editingDocUid by remember { mutableStateOf<String?>(null) }
     var isCreatingDoc by remember { mutableStateOf(false) }
 
@@ -95,6 +97,16 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
         }
     }
 
+    if (showAddCategoryDialog) {
+        AddCategoryDialog(
+                onDismiss = { showAddCategoryDialog = false },
+                onConfirm = { name ->
+                    appViewModel.addCategory(name)
+                    showAddCategoryDialog = false
+                }
+        )
+    }
+
     AppDrawer(
             drawerState = drawerState,
             categories = allCategories,
@@ -102,6 +114,10 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
                 scope.launch { drawerState.close() }
                 // Handle category click (filter?) - for now just close
                 // appViewModel.setCategoryFilter(category) // TODO: Implement if needed
+            },
+            onAddCategoryClick = {
+                scope.launch { drawerState.close() }
+                showAddCategoryDialog = true
             }
     ) {
         Scaffold(

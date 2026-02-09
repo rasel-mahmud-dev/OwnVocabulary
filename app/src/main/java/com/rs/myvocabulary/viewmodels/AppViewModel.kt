@@ -289,6 +289,21 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun addCategory(categoryName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val names = categoryName.split(",").map { it.trim() }.filter { it.isNotBlank() }
+            names.forEach { name -> db.insertCategory(Label(name = name, color = "#FF0000")) }
+            loadCategories()
+        }
+    }
+
+    fun removeCategory(category: Label) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.deleteCategory(category.uid)
+            loadCategories()
+        }
+    }
+
     fun loadDocs() {
         // Implementation can be added when needed
         // db.getAllWordsPaginated(

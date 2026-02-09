@@ -14,7 +14,6 @@ import kotlin.collections.forEach
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
-import org.json.JSONObject
 
 data class CommentAttachment(val url: String, val type: String)
 
@@ -104,7 +103,6 @@ enum class SyncStatus {
         DELETED
 }
 
-
 class WordDatabase private constructor(context: Context) :
         SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
 
@@ -193,7 +191,7 @@ class WordDatabase private constructor(context: Context) :
             CREATE TABLE IF NOT EXISTS $TABLE_CATEGORIES (
                 $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
                 $COLUMN_UID TEXT UNIQUE NOT NULL,
-                $COLUMN_NAME TEXT NOT NULL,
+                $COLUMN_NAME TEXT NOT NULL UNIQUE COLLATE NOCASE,
                 $COLUMN_COLOR TEXT DEFAULT '#FF0000',
                 $COLUMN_CREATED_AT INTEGER NOT NULL,
                 $COLUMN_UPDATED_AT INTEGER NOT NULL,
@@ -449,6 +447,26 @@ class WordDatabase private constructor(context: Context) :
 
         fun insertCategory(category: Label): Long {
                 val db = writableDatabase
+
+                // Check if category with this name already exists
+                val cursor =
+                        db.query(
+                                TABLE_CATEGORIES,
+                                arrayOf(COLUMN_ID),
+                                "$COLUMN_NAME = ? AND $COLUMN_IS_DELETED = 0",
+                                arrayOf(category.name),
+                                null,
+                                null,
+                                null
+                        )
+
+                if (cursor.moveToFirst()) {
+                        val id = cursor.getLong(0)
+                        cursor.close()
+                        return id
+                }
+                cursor.close()
+
                 val values =
                         ContentValues().apply {
                                 put(COLUMN_UID, category.uid)
@@ -463,8 +481,19 @@ class WordDatabase private constructor(context: Context) :
                         TABLE_CATEGORIES,
                         null,
                         values,
-                        SQLiteDatabase.CONFLICT_REPLACE
+                        SQLiteDatabase.CONFLICT_IGNORE // Skip if name exists (though checked above)
                 )
+        }
+
+        fun deleteCategory(uid: String) {
+                val db = writableDatabase
+                val values =
+                        ContentValues().apply {
+                                put(COLUMN_IS_DELETED, 1)
+                                put(COLUMN_UPDATED_AT, System.currentTimeMillis())
+                                put(COLUMN_SYNC_STATUS, SyncStatus.PENDING.name)
+                        }
+                db.update(TABLE_CATEGORIES, values, "$COLUMN_UID = ?", arrayOf(uid))
         }
 
         fun getAllCategories(): List<Label> {
@@ -610,7 +639,6 @@ class WordDatabase private constructor(context: Context) :
                         }
                 }
         }
-
 
         fun getAllWordsAndClausesPaginated(
                 sortOrder: Int,
@@ -1238,8 +1266,6 @@ class WordDatabase private constructor(context: Context) :
                                 throw e
                         }
                 }
-
-
 
         fun insertComment(wordUid: String, comment: Comment) {
                 val word = getWordByUidSync(wordUid) ?: return

@@ -18,12 +18,10 @@ import com.rs.myvocabulary.viewmodels.AppViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LabelsManagementScreen(appViewModel: AppViewModel, onBack: () -> Unit) {
-    val suggestedCategories by appViewModel.suggestedCategories.collectAsState()
+    val allCategories by appViewModel.allCategories.collectAsState()
     var newCategory by remember { mutableStateOf("") }
 
-    LaunchedEffect(Unit) {
-        // Load categories if needed
-    }
+    LaunchedEffect(Unit) { appViewModel.loadCategories() }
 
     Scaffold(
             topBar = {
@@ -69,14 +67,14 @@ fun LabelsManagementScreen(appViewModel: AppViewModel, onBack: () -> Unit) {
                         OutlinedTextField(
                                 value = newCategory,
                                 onValueChange = { newCategory = it },
-                                label = { Text("New Category") },
+                                label = { Text("New Category (comma separated for multiple)") },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true
                         )
                         IconButton(
                                 onClick = {
                                     if (newCategory.isNotBlank()) {
-                                        // appViewModel.addCategory(newCategory)
+                                        appViewModel.addCategory(newCategory)
                                         newCategory = ""
                                     }
                                 }
@@ -84,14 +82,12 @@ fun LabelsManagementScreen(appViewModel: AppViewModel, onBack: () -> Unit) {
                     }
                     Spacer(modifier = Modifier.height(8.dp))
                     LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(suggestedCategories) { category ->
+                        items(allCategories) { category ->
                             ListItem(
-                                    headlineContent = { Text(category) },
+                                    headlineContent = { Text(category.name) },
                                     trailingContent = {
                                         IconButton(
-                                                onClick = {
-                                                    /* appViewModel.removeCategory(category) */
-                                                }
+                                                onClick = { appViewModel.removeCategory(category) }
                                         ) {
                                             Icon(
                                                     Icons.Default.Delete,

@@ -1,17 +1,21 @@
 package com.rs.myvocabulary.composeable.drawer
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
@@ -28,6 +32,7 @@ fun AppDrawer(
         drawerState: DrawerState,
         categories: List<Label>,
         onCategoryClick: (Label) -> Unit,
+        onAddCategoryClick: () -> Unit = {},
         content: @Composable () -> Unit
 ) {
     ModalNavigationDrawer(
@@ -40,11 +45,22 @@ fun AppDrawer(
                                             .verticalScroll(rememberScrollState())
                     ) {
                         Spacer(Modifier.height(12.dp))
-                        Text(
-                                "Categories",
-                                modifier = Modifier.padding(8.dp),
-                                style = MaterialTheme.typography.titleLarge
-                        )
+                        Row(
+                                modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                verticalAlignment = androidx.compose.ui.Alignment.CenterVertically
+                        ) {
+                            Text(
+                                    "Categories",
+                                    modifier = Modifier.weight(1f),
+                                    style = MaterialTheme.typography.titleLarge
+                            )
+                            IconButton(onClick = onAddCategoryClick) {
+                                Icon(
+                                        imageVector = Icons.Default.Add,
+                                        contentDescription = "Manage Categories"
+                                )
+                            }
+                        }
                         HorizontalDivider()
 
                         if (categories.isEmpty()) {
