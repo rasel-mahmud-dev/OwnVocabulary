@@ -363,6 +363,10 @@ fun DetailDocs(
                             onTitleChange = { title = it }
                     )
 
+                    if (noteDetail?.type == "word" || noteDetail?.type == "clause") {
+                        Text(text = noteDetail?.shortMeaning ?: "")
+                    }
+
                     if (content.isNotEmpty()) {
                         ArticleContentCard(
                                 isReadOnly = isReadOnly,
