@@ -3,10 +3,7 @@ package com.rs.myvocabulary.sync
 import com.google.gson.reflect.TypeToken
 import com.rs.myvocabulary.database.*
 
-/**
- * Simplified pull job that only syncs words with embedded categories, tags, attachments, and
- * comments
- */
+/** Simplified pull job that only syncs words with embedded categories, attachments, and comments */
 class PullWordJob(
         private val saveWords: (List<WordPartial>) -> Unit,
         private val isConnected: () -> Boolean,

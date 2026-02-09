@@ -53,11 +53,6 @@ fun CreatePostScreen(
         LaunchedEffect(Unit) { viewModel.loadData(context) }
 
         // Data States
-        val selectedTags = remember {
-                mutableStateListOf<String>().apply {
-                        postToEdit?.tags?.map { it.name }?.let { addAll(it) }
-                }
-        }
         val selectedCategories = remember {
                 mutableStateListOf<Map<String, String>>().apply {
                         postToEdit?.categories
@@ -175,8 +170,6 @@ fun CreatePostScreen(
                                                                 context = context,
                                                                 textContent = textContent,
                                                                 attachments = attachments,
-                                                                selectedTags =
-                                                                        selectedTags.toList(),
                                                                 selectedCategories =
                                                                         selectedCategories.toList(),
                                                                 type = selectedType,

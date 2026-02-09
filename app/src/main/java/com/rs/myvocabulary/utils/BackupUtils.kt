@@ -35,7 +35,7 @@ object BackupUtils {
         val gson = GsonBuilder().setPrettyPrinting().create()
 
         try {
-            // 2. Export Words (includes embedded comments, tags, categories)
+            // 2. Export Words (includes embedded comments, categories)
             val words = db.getAllWords()
             File(exportDir, "posts.json").writeText(gson.toJson(words))
 
@@ -132,7 +132,7 @@ object BackupUtils {
             // 2. Clear Database before restoration
             db.clearAllData()
 
-            // 5. Restore Words (includes embedded comments, tags, categories)
+            // 5. Restore Words (includes embedded comments, categories)
             val postsFile = File(jsonDir, "posts.json")
             if (postsFile.exists()) {
                 val type = object : TypeToken<List<Word>>() {}.type

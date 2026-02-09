@@ -14,7 +14,6 @@ import com.rs.myvocabulary.database.Comment
 import com.rs.myvocabulary.database.Label
 import com.rs.myvocabulary.database.PreferencesManager
 import com.rs.myvocabulary.database.SyncStatus
-import com.rs.myvocabulary.database.Tag
 import com.rs.myvocabulary.database.Word
 import com.rs.myvocabulary.database.WordDatabase
 import com.rs.myvocabulary.database.WordPartial
@@ -123,10 +122,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _isAiSuggesting = MutableStateFlow(false)
     val isAiSuggesting: StateFlow<Boolean> = _isAiSuggesting.asStateFlow()
 
-    // Suggested Tags State
-    private val _suggestedTags = MutableStateFlow<List<String>>(emptyList())
-    val suggestedTags: StateFlow<List<String>> = _suggestedTags.asStateFlow()
-
     // Suggested Categories State
     private val _suggestedCategories = MutableStateFlow<List<String>>(emptyList())
     val suggestedCategories: StateFlow<List<String>> = _suggestedCategories.asStateFlow()
@@ -156,10 +151,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // Backup Files State
     private val _backupFiles = MutableStateFlow<List<File>>(emptyList())
     val backupFiles: StateFlow<List<File>> = _backupFiles.asStateFlow()
-
-    // All Tags State
-    private val _allTags = MutableStateFlow<List<Tag>>(emptyList())
-    val allTags: StateFlow<List<Tag>> = _allTags.asStateFlow()
 
     // All Categories State
     private val _allCategories = MutableStateFlow<List<Label>>(emptyList())
@@ -209,7 +200,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadAuth()
         loadCategories()
-        loadTags()
     }
 
     // ========== WORD LOADING FUNCTIONS ==========
@@ -296,13 +286,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val categories = db.getAllCategories()
             _allCategories.value = categories
-        }
-    }
-
-    fun loadTags() {
-        viewModelScope.launch(Dispatchers.IO) {
-            val tags = db.getAllTags()
-            _allTags.value = tags
         }
     }
 
@@ -682,9 +665,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val aiHelper = UnifiedAiHelper()
                 val prompt =
                         """
-                    Analyze the following text and suggest relevant categories and tags.
-                    Format the output ONLY as a valid JSON object with 'categories' and 'tags' fields.
-                    Each field should be a list of strings.
+                    Analyze the following text and suggest relevant categories.
+                    Format the output ONLY as a valid JSON object with 'categories' field.
+                    The field should be a list of strings.
 
                     Text: "$postText"
                 """.trimIndent()
@@ -702,16 +685,11 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             }
 
                     val json = JSONObject(cleanedResult)
-                    val tagsArray = json.getJSONArray("tags")
                     val catsArray = json.getJSONArray("categories")
-
-                    val tags = mutableListOf<String>()
-                    for (i in 0 until tagsArray.length()) tags.add(tagsArray.getString(i))
 
                     val cats = mutableListOf<String>()
                     for (i in 0 until catsArray.length()) cats.add(catsArray.getString(i))
 
-                    _suggestedTags.value = tags
                     _suggestedCategories.value = cats
                     onComplete()
                 }
@@ -902,22 +880,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun applyAiSuggestions(
-            context: Context,
-            wordId: String,
-            tags: List<String>,
-            categories: List<String>
-    ) {
+    fun applyAiSuggestions(context: Context, wordId: String, categories: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
             val db = WordDatabase.getInstance(context)
-            val dbTags: List<Tag> =
-                    tags.map { tagName -> Tag(uid = UUID.randomUUID().toString(), name = tagName) }
             val dbCategories: List<Label> =
                     categories.map { catName ->
                         Label(uid = UUID.randomUUID().toString(), name = catName, color = "#FF0000")
                     }
-
-            db.updateWordTagsAndCategories(wordId, dbTags, dbCategories)
+            db.updateWordCategories(wordId, dbCategories)
             loadNoteDetailGeneric(wordId)
             startWordSync()
         }
@@ -926,13 +896,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     // ========== POST FUNCTIONS ==========
 
     fun loadData(context: Context) {
-        // Load tags and categories if needed
         viewModelScope.launch(Dispatchers.IO) {
             try {
                 // val db = WordDatabase.getInstance(context)
-                // Load all tags
-                //                val tags = db.getAllTags()
-                //                _allTags.value = tags.map { it.name }
                 //
                 //                // Load all categories
                 //                val categories = db.getAllCategories()
@@ -980,7 +946,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             context: Context,
             textContent: String, /* details */
             attachments: List<PostAttachment>,
-            selectedTags: List<String>,
             selectedCategories: List<Map<String, String>>,
             type: String = "word",
             word: String = "", /* word/title */
@@ -1020,10 +985,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
                 // 2. Resolve Tags and Categories (Creating new objects as we don't have global
                 // lookups)
-                val finalTags =
-                        selectedTags.map { tagName ->
-                            Tag(uid = UUID.randomUUID().toString(), name = tagName)
-                        }
 
                 val finalCategories =
                         selectedCategories.map { catMap ->
@@ -1051,7 +1012,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 attachments =
                                         if (savedAttachments.isNotEmpty()) savedAttachments
                                         else null,
-                                tags = if (finalTags.isNotEmpty()) finalTags else null,
                                 categories =
                                         if (finalCategories.isNotEmpty()) finalCategories else null,
                                 syncStatus = SyncStatus.PENDING
@@ -1070,14 +1030,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun insertTag(name: String) {
-        viewModelScope.launch(Dispatchers.IO) {
-            // val db = WordDatabase.getInstance(context)
-            //            db.insertTag(name)
-            loadData(context = application)
-        }
-    }
-
     fun insertComment(postId: String, comment: Comment) {
         viewModelScope.launch(Dispatchers.IO) {
             db.insertComment(postId, comment)
@@ -1088,24 +1040,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             startWordSync()
         }
     }
-
-    /*
-    fun updatePostTagsAndCategories(
-            context: Context,
-            postId: String,
-            tags: List<Tag>,
-            categories: List<Label>
-    ) {
-        viewModelScope.launch(Dispatchers.IO) {
-            val db = WordDatabase.getInstance(context)
-            //            db.updatePostTagsAndCategories(postId, tags, categories)
-            // Refresh post
-            //            val updatedPost = db.getPostById(postId)
-            //            _currentPost.value = updatedPost
-            fetchPosts(context)
-        }
-    }
-    */
 
     // ========== PRACTICE FUNCTIONS ==========
 

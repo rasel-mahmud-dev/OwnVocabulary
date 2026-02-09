@@ -18,14 +18,11 @@ import com.rs.myvocabulary.viewmodels.AppViewModel
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun LabelsManagementScreen(appViewModel: AppViewModel, onBack: () -> Unit) {
-    val suggestedTags by appViewModel.suggestedTags.collectAsState()
     val suggestedCategories by appViewModel.suggestedCategories.collectAsState()
-    var newTag by remember { mutableStateOf("") }
     var newCategory by remember { mutableStateOf("") }
 
     LaunchedEffect(Unit) {
-        // Load tags/categories if needed, but they are StateFlows in ViewModel
-        // Assuming they are populated or we trigger a loading
+        // Load categories if needed
     }
 
     Scaffold(
@@ -51,67 +48,8 @@ fun LabelsManagementScreen(appViewModel: AppViewModel, onBack: () -> Unit) {
                                 .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp)
         ) {
-            // Tags Section
             Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
-                    colors =
-                            CardDefaults.cardColors(
-                                    containerColor = MaterialTheme.colorScheme.surfaceContainer
-                            )
-            ) {
-                Column(modifier = Modifier.padding(16.dp).fillMaxSize()) {
-                    Text(
-                            "Tags",
-                            style = MaterialTheme.typography.titleMedium,
-                            color = MaterialTheme.colorScheme.primary
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        OutlinedTextField(
-                                value = newTag,
-                                onValueChange = { newTag = it },
-                                label = { Text("New Tag") },
-                                modifier = Modifier.weight(1f),
-                                singleLine = true
-                        )
-                        IconButton(
-                                onClick = {
-                                    if (newTag.isNotBlank()) {
-                                        // Add to suggestedTags (assuming ViewModel has method or
-                                        // we just use it for suggestions)
-                                        // For now, let's assume we can add it to a list in
-                                        // ViewModel
-                                        // appViewModel.addTag(newTag)
-                                        newTag = ""
-                                    }
-                                }
-                        ) { Icon(Icons.Default.Add, contentDescription = "Add Tag") }
-                    }
-                    Spacer(modifier = Modifier.height(8.dp))
-                    LazyColumn(modifier = Modifier.weight(1f)) {
-                        items(suggestedTags) { tag ->
-                            ListItem(
-                                    headlineContent = { Text(tag) },
-                                    trailingContent = {
-                                        IconButton(onClick = { /* appViewModel.removeTag(tag) */}) {
-                                            Icon(
-                                                    Icons.Default.Delete,
-                                                    contentDescription = "Delete"
-                                            )
-                                        }
-                                    }
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Categories Section
-            Card(
-                    modifier = Modifier.fillMaxWidth().weight(1f),
+                    modifier = Modifier.fillMaxWidth().fillMaxHeight(),
                     colors =
                             CardDefaults.cardColors(
                                     containerColor = MaterialTheme.colorScheme.surfaceContainer

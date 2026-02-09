@@ -78,10 +78,7 @@ class PushEntityJob<T>(
         }
 }
 
-/**
- * Simplified push job that only syncs words with embedded categories, tags, attachments, and
- * comments
- */
+/** Simplified push job that only syncs words with embedded categories, attachments, and comments */
 class PushWordJob(
         private val getUnsyncedWords: suspend () -> List<Word>,
         private val updateWordSyncStatus: (wordId: String, retryCount: Int) -> Unit,

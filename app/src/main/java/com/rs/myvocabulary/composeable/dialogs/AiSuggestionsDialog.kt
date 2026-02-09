@@ -16,10 +16,9 @@ import androidx.compose.ui.unit.dp
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun AiSuggestionsDialog(
-        suggestedTags: List<String>,
         suggestedCategories: List<String>,
         onDismiss: () -> Unit,
-        onProceed: (tags: List<String>, categories: List<String>) -> Unit
+        onProceed: (categories: List<String>) -> Unit
 ) {
     AlertDialog(
             onDismissRequest = onDismiss,
@@ -43,29 +42,15 @@ fun AiSuggestionsDialog(
                         }
                     }
 
-                    if (suggestedTags.isNotEmpty()) {
-                        Column {
-                            Text("Suggested Tags:", style = MaterialTheme.typography.labelLarge)
-                            FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(4.dp)
-                            ) {
-                                suggestedTags.forEach { tag ->
-                                    AssistChip(onClick = {}, label = { Text("#$tag") })
-                                }
-                            }
-                        }
-                    }
-
-                    if (suggestedTags.isEmpty() && suggestedCategories.isEmpty()) {
+                    if (suggestedCategories.isEmpty()) {
                         Text("No suggestions found.")
                     }
                 }
             },
             confirmButton = {
                 Button(
-                        onClick = { onProceed(suggestedTags, suggestedCategories) },
-                        enabled = suggestedTags.isNotEmpty() || suggestedCategories.isNotEmpty()
+                        onClick = { onProceed(suggestedCategories) },
+                        enabled = suggestedCategories.isNotEmpty()
                 ) { Text("Proceed") }
             },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Dismiss") } }

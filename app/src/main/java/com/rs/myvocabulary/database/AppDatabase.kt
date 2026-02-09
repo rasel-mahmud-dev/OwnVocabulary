@@ -33,14 +33,21 @@ data class Comment(
         val isDeleted: Boolean = false,
 )
 
-data class Tag(
+data class Label(
         val id: Int = 0,
-        val uid: String,
+        val uid: String = System.currentTimeMillis().toString(),
         val name: String,
+        val color: String,
         val createdAt: Long = System.currentTimeMillis(),
         val updatedAt: Long = System.currentTimeMillis(),
         val syncStatus: SyncStatus = SyncStatus.PENDING,
-        val isDeleted: Boolean = false,
+        val retryCount: Int = 0,
+        val lastSyncAttempt: Long? = null,
+        val children: List<Label> = emptyList(),
+        var associatedNotes: List<Word> = emptyList(),
+        val associatedNoteCount: Int? = 0,
+        val parentId: String? = null,
+        val isDeleted: Boolean = false
 )
 
 data class Word(
@@ -63,29 +70,9 @@ data class Word(
         val retryCount: Int = 0,
         val lastSyncAttempt: Long? = null,
         var categories: List<Label>? = null,
-        val tags: List<Tag>? = null,
         val attachments: List<CommentAttachment>? = null,
         val comments: List<Comment>? = null
 )
-
-data class Label(
-        val id: Int = 0,
-        val uid: String = System.currentTimeMillis().toString(),
-        val name: String,
-        val color: String,
-        val createdAt: Long = System.currentTimeMillis(),
-        val updatedAt: Long = System.currentTimeMillis(),
-        val syncStatus: SyncStatus = SyncStatus.PENDING,
-        val retryCount: Int = 0,
-        val lastSyncAttempt: Long? = null,
-        val children: List<Label> = emptyList(),
-        var associatedNotes: List<Word> = emptyList(),
-        val associatedNoteCount: Int? = 0,
-        val parentId: String? = null,
-        val isDeleted: Boolean = false
-)
-
-// Unused data classes removed: PostComment, NoteCategory, PostTag
 
 data class WordPartial(
         val id: Long = 0,
@@ -105,7 +92,6 @@ data class WordPartial(
         val updatedAt: Long? = null,
         val isDeleted: Boolean? = null,
         var categories: List<Label>? = null,
-        val tags: List<Tag>? = null,
         val attachments: List<CommentAttachment>? = null,
         val comments: List<Comment>? = null
 )
@@ -118,14 +104,6 @@ enum class SyncStatus {
         DELETED
 }
 
-enum class SortOrder {
-        CreatedAtAsc,
-        CreatedAtDesc,
-        UpdatedAtAsc,
-        UpdatedAtDesc,
-        WordAsc,
-        WordDesc
-}
 
 class WordDatabase private constructor(context: Context) :
         SQLiteOpenHelper(context, DATABASE_NAME, null, DATABASE_VERSION) {
@@ -138,7 +116,6 @@ class WordDatabase private constructor(context: Context) :
                 // Table and column names
                 private const val TABLE_WORDS = "words"
                 private const val TABLE_CATEGORIES = "categories" // New table
-                private const val TABLE_TAGS = "tags"
 
                 private const val COLUMN_ID = "id"
                 private const val COLUMN_UID = "uid"
@@ -166,7 +143,6 @@ class WordDatabase private constructor(context: Context) :
 
                 const val COLUMN_ATTACHMENTS = "attachments"
                 const val COLUMN_CATEGORIES_JSON = "categories_json"
-                const val COLUMN_TAGS_JSON = "tags_json"
                 const val COLUMN_COMMENTS_JSON = "comments_json"
 
                 fun getInstance(context: Context): WordDatabase {
@@ -198,7 +174,6 @@ class WordDatabase private constructor(context: Context) :
                 $COLUMN_DETAILS TEXT DEFAULT '',
                 $COLUMN_ATTACHMENTS TEXT,
                 $COLUMN_CATEGORIES_JSON TEXT,
-                $COLUMN_TAGS_JSON TEXT,
                 $COLUMN_COMMENTS_JSON TEXT,
                 $COLUMN_IS_FAVORITE INTEGER DEFAULT 0,
                 $COLUMN_VIEW_COUNT INTEGER DEFAULT 0,
@@ -228,19 +203,9 @@ class WordDatabase private constructor(context: Context) :
         """.trimIndent()
                 )
 
-                db.execSQL(
-                        """
-            CREATE TABLE IF NOT EXISTS $TABLE_TAGS (
-                $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
-                $COLUMN_UID TEXT UNIQUE NOT NULL,
-                $COLUMN_NAME TEXT NOT NULL UNIQUE,
-                $COLUMN_CREATED_AT INTEGER NOT NULL,
-                $COLUMN_UPDATED_AT INTEGER NOT NULL,
-                $COLUMN_IS_DELETED INTEGER DEFAULT 0,
-                $COLUMN_SYNC_STATUS TEXT DEFAULT 'PENDING'
+                db.execSQL("""
             )
-        """.trimIndent()
-                )
+        """.trimIndent())
 
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_word ON $TABLE_WORDS ($COLUMN_WORD)")
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_uid ON $TABLE_WORDS ($COLUMN_UID)")
@@ -261,13 +226,9 @@ class WordDatabase private constructor(context: Context) :
                                         "ALTER TABLE $TABLE_WORDS ADD COLUMN $COLUMN_CATEGORIES_JSON TEXT"
                                 )
                                 db.execSQL(
-                                        "ALTER TABLE $TABLE_WORDS ADD COLUMN $COLUMN_TAGS_JSON TEXT"
-                                )
-                                db.execSQL(
                                         "ALTER TABLE $TABLE_WORDS ADD COLUMN $COLUMN_COMMENTS_JSON TEXT"
                                 )
 
-                                // Migrate tags from junction table to JSON
                                 val wordsCursor =
                                         db.query(
                                                 TABLE_WORDS,
@@ -280,61 +241,6 @@ class WordDatabase private constructor(context: Context) :
                                         )
                                 while (wordsCursor.moveToNext()) {
                                         val wordUid = wordsCursor.getString(0)
-
-                                        // Get tags for this word
-                                        val tagsCursor =
-                                                db.rawQuery(
-                                                        """
-                SELECT t.* FROM tags t
-                INNER JOIN post_tags pt ON t.uid = pt.tag_id
-                WHERE pt.post_id = ? AND t.is_deleted = 0
-            """,
-                                                        arrayOf(wordUid)
-                                                )
-
-                                        val tags = mutableListOf<Tag>()
-                                        while (tagsCursor.moveToNext()) {
-                                                tags.add(
-                                                        Tag(
-                                                                id =
-                                                                        tagsCursor.getInt(
-                                                                                tagsCursor
-                                                                                        .getColumnIndexOrThrow(
-                                                                                                "id"
-                                                                                        )
-                                                                        ),
-                                                                uid =
-                                                                        tagsCursor.getString(
-                                                                                tagsCursor
-                                                                                        .getColumnIndexOrThrow(
-                                                                                                "uid"
-                                                                                        )
-                                                                        ),
-                                                                name =
-                                                                        tagsCursor.getString(
-                                                                                tagsCursor
-                                                                                        .getColumnIndexOrThrow(
-                                                                                                "name"
-                                                                                        )
-                                                                        ),
-                                                                createdAt =
-                                                                        tagsCursor.getLong(
-                                                                                tagsCursor
-                                                                                        .getColumnIndexOrThrow(
-                                                                                                COLUMN_CREATED_AT
-                                                                                        )
-                                                                        ),
-                                                                updatedAt =
-                                                                        tagsCursor.getLong(
-                                                                                tagsCursor
-                                                                                        .getColumnIndexOrThrow(
-                                                                                                COLUMN_UPDATED_AT
-                                                                                        )
-                                                                        )
-                                                        )
-                                                )
-                                        }
-                                        tagsCursor.close()
 
                                         // Get categories for this word
                                         val categoriesCursor =
@@ -462,12 +368,6 @@ class WordDatabase private constructor(context: Context) :
                                         // Update word with JSON data
                                         val values =
                                                 ContentValues().apply {
-                                                        if (tags.isNotEmpty()) {
-                                                                put(
-                                                                        COLUMN_TAGS_JSON,
-                                                                        Gson().toJson(tags)
-                                                                )
-                                                        }
                                                         if (categories.isNotEmpty()) {
                                                                 put(
                                                                         COLUMN_CATEGORIES_JSON,
@@ -711,157 +611,6 @@ class WordDatabase private constructor(context: Context) :
                 }
         }
 
-        fun getTotalWordsCountExceptOwn(
-                authId: String,
-                searchQuery: String = "",
-                callback: (Int) -> Unit
-        ) {
-                executor.execute {
-                        val db = readableDatabase
-
-                        val selectionList = mutableListOf<String>()
-                        val selectionArgsList = mutableListOf<String>()
-
-                        // Base conditions
-                        selectionList.add("$COLUMN_SYNC_STATUS != ?")
-                        selectionArgsList.add(SyncStatus.DELETED.name)
-
-                        selectionList.add("$COLUMN_USER_ID != ?")
-                        selectionArgsList.add(authId)
-
-                        // Search query
-                        if (searchQuery.isNotEmpty()) {
-                                selectionList.add(
-                                        "($COLUMN_WORD LIKE ? OR $COLUMN_SHORT_MEANING LIKE ? OR $COLUMN_DETAILS LIKE ?)"
-                                )
-                                val searchPattern = "%$searchQuery%"
-                                selectionArgsList.add(searchPattern)
-                                selectionArgsList.add(searchPattern)
-                                selectionArgsList.add(searchPattern)
-                        }
-
-                        val selection = selectionList.joinToString(" AND ")
-
-                        val cursor =
-                                db.rawQuery(
-                                        "SELECT COUNT(*) FROM $TABLE_WORDS WHERE $selection",
-                                        selectionArgsList.toTypedArray()
-                                )
-
-                        var count = 0
-                        if (cursor.moveToFirst()) {
-                                count = cursor.getInt(0)
-                        }
-                        cursor.close()
-                        callback(count)
-                }
-        }
-
-        fun getTotalWordsCountOwn(
-                authId: String,
-                searchQuery: String = "",
-                callback: (Int) -> Unit
-        ) {
-                executor.execute {
-                        val db = readableDatabase
-
-                        val selectionList = mutableListOf<String>()
-                        val selectionArgsList = mutableListOf<String>()
-
-                        // Base conditions
-                        selectionList.add("$COLUMN_SYNC_STATUS != ?")
-                        selectionArgsList.add(SyncStatus.DELETED.name)
-
-                        selectionList.add("$COLUMN_USER_ID = ?")
-                        selectionArgsList.add(authId)
-
-                        if (searchQuery.isNotEmpty()) {
-                                selectionList.add(
-                                        "($COLUMN_WORD LIKE ? OR $COLUMN_SHORT_MEANING LIKE ? OR $COLUMN_DETAILS LIKE ?)"
-                                )
-                                val searchPattern = "%$searchQuery%"
-                                selectionArgsList.add(searchPattern)
-                                selectionArgsList.add(searchPattern)
-                                selectionArgsList.add(searchPattern)
-                        }
-
-                        val selection = selectionList.joinToString(" AND ")
-
-                        val cursor =
-                                db.rawQuery(
-                                        "SELECT COUNT(*) FROM $TABLE_WORDS WHERE $selection",
-                                        selectionArgsList.toTypedArray()
-                                )
-
-                        var count = 0
-                        if (cursor.moveToFirst()) {
-                                count = cursor.getInt(0)
-                        }
-                        cursor.close()
-                        callback(count)
-                }
-        }
-
-        fun getAllWordsExceptOwn(
-                authId: String,
-                limit: Int = 20,
-                offset: Int = 0,
-                searchQuery: String = "",
-                sortBy: String = "newest", // newest, oldest, alphabetical
-                callback: (List<Word>) -> Unit
-        ) {
-                executor.execute {
-                        val words = mutableListOf<Word>()
-                        val db = readableDatabase
-
-                        val selectionList = mutableListOf<String>()
-                        val selectionArgsList = mutableListOf<String>()
-
-                        selectionList.add("$COLUMN_SYNC_STATUS != ?")
-                        selectionArgsList.add(SyncStatus.DELETED.name)
-
-                        selectionList.add("$COLUMN_USER_ID != ?")
-                        selectionArgsList.add(authId)
-
-                        if (searchQuery.isNotEmpty()) {
-                                selectionList.add(
-                                        "($COLUMN_WORD LIKE ? OR $COLUMN_SHORT_MEANING LIKE ? OR $COLUMN_DETAILS LIKE ?)"
-                                )
-                                val searchPattern = "%$searchQuery%"
-                                selectionArgsList.add(searchPattern)
-                                selectionArgsList.add(searchPattern)
-                                selectionArgsList.add(searchPattern)
-                        }
-
-                        val selection = selectionList.joinToString(" AND ")
-
-                        // Sorting
-                        val orderBy =
-                                when (sortBy) {
-                                        "oldest" -> "$COLUMN_CREATED_AT ASC"
-                                        "alphabetical" -> "$COLUMN_WORD COLLATE NOCASE ASC"
-                                        else -> "$COLUMN_CREATED_AT DESC" // newest (default)
-                                }
-
-                        val cursor =
-                                db.query(
-                                        TABLE_WORDS,
-                                        null,
-                                        selection,
-                                        selectionArgsList.toTypedArray(),
-                                        null,
-                                        null,
-                                        orderBy,
-                                        "$offset, $limit"
-                                )
-
-                        while (cursor.moveToNext()) {
-                                words.add(getWordFromCursor(cursor))
-                        }
-                        cursor.close()
-                        callback(words)
-                }
-        }
 
         fun getAllWordsAndClausesPaginated(
                 sortOrder: Int,
@@ -1125,145 +874,6 @@ class WordDatabase private constructor(context: Context) :
                 }
         }
 
-        fun getAllWordsOwn(
-                authId: String,
-                limit: Int = 20,
-                offset: Int = 0,
-                searchQuery: String = "",
-                sortBy: String = "newest", // newest, oldest, alphabetical
-                callback: (List<Word>) -> Unit
-        ) {
-                executor.execute {
-                        println("authId----------------- $authId")
-                        val words = mutableListOf<Word>()
-                        val db = readableDatabase
-
-                        val selectionList = mutableListOf<String>()
-                        val selectionArgsList = mutableListOf<String>()
-
-                        selectionList.add("$TABLE_WORDS.$COLUMN_SYNC_STATUS != ?")
-                        selectionArgsList.add(SyncStatus.DELETED.name)
-
-                        if (searchQuery.isNotEmpty()) {
-                                selectionList.add(
-                                        "($TABLE_WORDS.$COLUMN_WORD LIKE ? OR $TABLE_WORDS.$COLUMN_SHORT_MEANING LIKE ? OR $TABLE_WORDS.$COLUMN_DETAILS LIKE ?)"
-                                )
-                                val searchPattern = "%$searchQuery%"
-                                selectionArgsList.add(searchPattern)
-                                selectionArgsList.add(searchPattern)
-                                selectionArgsList.add(searchPattern)
-                        }
-
-                        val selection = selectionList.joinToString(" AND ")
-
-                        val orderBy =
-                                when (sortBy) {
-                                        "oldest" -> "$TABLE_WORDS.$COLUMN_CREATED_AT ASC"
-                                        "alphabetical" ->
-                                                "$TABLE_WORDS.$COLUMN_WORD COLLATE NOCASE ASC"
-                                        else -> "$TABLE_WORDS.$COLUMN_CREATED_AT DESC" // newest
-                                // (default)
-                                }
-
-                        val query =
-                                """
-                SELECT $TABLE_WORDS.* FROM $TABLE_WORDS 
-                WHERE $selection 
-                ORDER BY $orderBy LIMIT $limit OFFSET $offset
-        """.trimIndent()
-
-                        val allArgs = selectionArgsList
-
-                        val cursor = db.rawQuery(query, allArgs.toTypedArray())
-
-                        while (cursor.moveToNext()) {
-                                words.add(getWordFromCursor(cursor))
-                        }
-                        cursor.close()
-                        callback(words)
-                }
-        }
-
-        fun totalWordCount(callback: (Int) -> Unit) {
-                executor.execute {
-                        val db = readableDatabase
-                        val query =
-                                "SELECT COUNT(*) FROM $TABLE_WORDS WHERE $COLUMN_SYNC_STATUS != ?"
-                        val cursor = db.rawQuery(query, arrayOf(SyncStatus.DELETED.name))
-                        var count = 0
-                        if (cursor.moveToFirst()) {
-                                count = cursor.getInt(0)
-                        }
-                        cursor.close()
-                        callback(count)
-                }
-        }
-
-        fun totalFavWordCount(callback: (Int) -> Unit) {
-                executor.execute {
-                        val db = readableDatabase
-                        val query =
-                                "SELECT COUNT(*) FROM $TABLE_WORDS WHERE $COLUMN_SYNC_STATUS != ? AND $COLUMN_IS_FAVORITE = 1"
-                        val cursor = db.rawQuery(query, arrayOf(SyncStatus.DELETED.name))
-                        var count = 0
-                        if (cursor.moveToFirst()) {
-                                count = cursor.getInt(0)
-                        }
-                        cursor.close()
-                        callback(count)
-                }
-        }
-
-        fun getVisitCounts(callback: (todayCount: Int, weekCount: Int) -> Unit) {
-                executor.execute {
-                        val db = readableDatabase
-
-                        // Calculate time boundaries
-                        val calendar =
-                                Calendar.getInstance().apply {
-                                        set(Calendar.HOUR_OF_DAY, 0)
-                                        set(Calendar.MINUTE, 0)
-                                        set(Calendar.SECOND, 0)
-                                        set(Calendar.MILLISECOND, 0)
-                                }
-                        val todayStartTime = calendar.timeInMillis
-
-                        calendar.set(Calendar.DAY_OF_WEEK, Calendar.MONDAY)
-                        val weekStartTime = calendar.timeInMillis
-
-                        // Single query using CASE statements
-                        val query =
-                                """
-            SELECT 
-                SUM(CASE WHEN $COLUMN_LAST_VIEWED >= ? THEN 1 ELSE 0 END) as today_count,
-                SUM(CASE WHEN $COLUMN_LAST_VIEWED >= ? THEN 1 ELSE 0 END) as week_count
-            FROM $TABLE_WORDS 
-            WHERE $COLUMN_SYNC_STATUS != ?
-        """.trimIndent()
-
-                        var todayCount = 0
-                        var weekCount = 0
-
-                        val cursor =
-                                db.rawQuery(
-                                        query,
-                                        arrayOf(
-                                                todayStartTime.toString(),
-                                                weekStartTime.toString(),
-                                                SyncStatus.DELETED.name
-                                        )
-                                )
-
-                        if (cursor.moveToFirst()) {
-                                todayCount = cursor.getInt(0)
-                                weekCount = cursor.getInt(1)
-                        }
-                        cursor.close()
-
-                        callback(todayCount, weekCount)
-                }
-        }
-
         fun getFavoriteWords(limit: Int = 20, offset: Int = 0, callback: (List<Word>) -> Unit) {
                 executor.execute {
                         val words = mutableListOf<Word>()
@@ -1315,43 +925,6 @@ class WordDatabase private constructor(context: Context) :
                         callback(words)
                 }
         }
-
-        suspend fun updateWord(word: Word): Int =
-                withContext(Dispatchers.IO) {
-                        val db = writableDatabase
-                        val values =
-                                ContentValues().apply {
-                                        put(COLUMN_WORD, word.word)
-                                        put(COLUMN_USER_ID, word.userId)
-                                        put(COLUMN_SHORT_MEANING, word.shortMeaning)
-                                        put(COLUMN_DETAILS, word.details)
-                                        put(COLUMN_IS_FAVORITE, if (word.isFavorite) 1 else 0)
-                                        put(COLUMN_VIEW_COUNT, word.viewCount)
-                                        put(COLUMN_LAST_VIEWED, word.lastVisited)
-                                        put(COLUMN_UPDATED_AT, System.currentTimeMillis())
-                                        put(COLUMN_SYNC_STATUS, SyncStatus.PENDING.name)
-                                        if (word.attachments != null) {
-                                                val jsonArray = JSONArray()
-                                                word.attachments.forEach { attachment ->
-                                                        val jsonObject = JSONObject()
-                                                        jsonObject.put("url", attachment.url)
-                                                        jsonObject.put("type", attachment.type)
-                                                        jsonArray.put(jsonObject)
-                                                }
-                                                put(COLUMN_ATTACHMENTS, jsonArray.toString())
-                                        }
-                                        // Handle categories, tags, comments as JSON
-                                        word.categories?.let {
-                                                put(COLUMN_CATEGORIES_JSON, Gson().toJson(it))
-                                        }
-                                        word.tags?.let { put(COLUMN_TAGS_JSON, Gson().toJson(it)) }
-                                        word.comments?.let {
-                                                put(COLUMN_COMMENTS_JSON, Gson().toJson(it))
-                                        }
-                                }
-
-                        db.update(TABLE_WORDS, values, "$COLUMN_UID = ?", arrayOf(word.uid))
-                }
 
         fun upsertWord(words: List<WordPartial>) {
                 if (words.isEmpty()) return
@@ -1419,9 +992,6 @@ class WordDatabase private constructor(context: Context) :
                                                                 Gson().toJson(it)
                                                         )
                                                 }
-                                                word.tags?.let {
-                                                        put(COLUMN_TAGS_JSON, Gson().toJson(it))
-                                                }
                                                 word.comments?.let {
                                                         put(COLUMN_COMMENTS_JSON, Gson().toJson(it))
                                                 }
@@ -1485,10 +1055,6 @@ class WordDatabase private constructor(context: Context) :
                                                 )
                                         }
 
-                                        partialWord.tags?.let { tags ->
-                                                put(COLUMN_TAGS_JSON, Gson().toJson(tags))
-                                        }
-
                                         // Always update these fields
                                         put(COLUMN_UPDATED_AT, System.currentTimeMillis())
                                 }
@@ -1534,98 +1100,6 @@ class WordDatabase private constructor(context: Context) :
                                 }
                         }
                 return null
-        }
-
-        // TAGS OPERATIONS
-
-        fun insertTag(tag: Tag): Long {
-                val db = writableDatabase
-                val values =
-                        ContentValues().apply {
-                                put(COLUMN_UID, tag.uid)
-                                put(COLUMN_NAME, tag.name)
-                                put(COLUMN_CREATED_AT, tag.createdAt)
-                                put(COLUMN_UPDATED_AT, tag.updatedAt)
-                                put(COLUMN_IS_DELETED, if (tag.isDeleted) 1 else 0)
-                                put(COLUMN_SYNC_STATUS, tag.syncStatus.name)
-                        }
-                return db.insertWithOnConflict(
-                        TABLE_TAGS,
-                        null,
-                        values,
-                        SQLiteDatabase.CONFLICT_IGNORE // Avoid duplicating tags
-                )
-        }
-
-        fun getAllTags(): List<Tag> {
-                // Ensure table exists (migration fallback for existing installs without strict
-                // versioning)
-                try {
-                        readableDatabase.rawQuery("SELECT 1 FROM $TABLE_TAGS LIMIT 1", null).close()
-                } catch (e: Exception) {
-                        onCreate(writableDatabase)
-                }
-
-                val tags = mutableListOf<Tag>()
-                val db = readableDatabase
-                val cursor =
-                        db.query(
-                                TABLE_TAGS,
-                                null,
-                                "$COLUMN_IS_DELETED = 0",
-                                null,
-                                null,
-                                null,
-                                "$COLUMN_NAME ASC"
-                        )
-
-                while (cursor.moveToNext()) {
-                        tags.add(
-                                Tag(
-                                        id = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_ID)),
-                                        uid =
-                                                cursor.getString(
-                                                        cursor.getColumnIndexOrThrow(COLUMN_UID)
-                                                ),
-                                        name =
-                                                cursor.getString(
-                                                        cursor.getColumnIndexOrThrow(COLUMN_NAME)
-                                                ),
-                                        createdAt =
-                                                cursor.getLong(
-                                                        cursor.getColumnIndexOrThrow(
-                                                                COLUMN_CREATED_AT
-                                                        )
-                                                ),
-                                        updatedAt =
-                                                cursor.getLong(
-                                                        cursor.getColumnIndexOrThrow(
-                                                                COLUMN_UPDATED_AT
-                                                        )
-                                                ),
-                                        isDeleted =
-                                                cursor.getInt(
-                                                        cursor.getColumnIndexOrThrow(
-                                                                COLUMN_IS_DELETED
-                                                        )
-                                                ) == 1,
-                                        syncStatus =
-                                                try {
-                                                        SyncStatus.valueOf(
-                                                                cursor.getString(
-                                                                        cursor.getColumnIndexOrThrow(
-                                                                                COLUMN_SYNC_STATUS
-                                                                        )
-                                                                )
-                                                        )
-                                                } catch (e: Exception) {
-                                                        SyncStatus.PENDING
-                                                }
-                                )
-                        )
-                }
-                cursor.close()
-                return tags
         }
 
         fun getWordByUid(uid: String, callback: (Word?) -> Unit) {
@@ -1678,11 +1152,10 @@ class WordDatabase private constructor(context: Context) :
                                 put(COLUMN_LAST_SYNC_ATTEMPT, word.lastSyncAttempt)
                                 // Handle attachments if present
                                 word.attachments?.let { put(COLUMN_ATTACHMENTS, Gson().toJson(it)) }
-                                // Handle categories, tags, comments as JSON
+                                // Handle categories if present
                                 word.categories?.let {
                                         put(COLUMN_CATEGORIES_JSON, Gson().toJson(it))
                                 }
-                                word.tags?.let { put(COLUMN_TAGS_JSON, Gson().toJson(it)) }
                                 word.comments?.let { put(COLUMN_COMMENTS_JSON, Gson().toJson(it)) }
                         }
 
@@ -1766,16 +1239,7 @@ class WordDatabase private constructor(context: Context) :
                         }
                 }
 
-        fun deleteWordHard(uid: String) {
-                executor.execute {
-                        val db = writableDatabase
-                        try {
-                                db.delete(TABLE_WORDS, "$COLUMN_UID = ?", arrayOf(uid))
-                        } catch (e: Exception) {
-                                println("Failed to delete word: ${e.message}")
-                        }
-                }
-        }
+
 
         fun insertComment(wordUid: String, comment: Comment) {
                 val word = getWordByUidSync(wordUid) ?: return
@@ -1820,18 +1284,14 @@ class WordDatabase private constructor(context: Context) :
                 db.update(TABLE_WORDS, values, "$COLUMN_UID = ?", arrayOf(wordUid))
         }
 
-        fun updateWordTagsAndCategories(wordUid: String, tags: List<Tag>, categories: List<Label>) {
+        fun updateWordCategories(wordUid: String, categories: List<Label>) {
                 val db = writableDatabase
 
                 // Ensure all categories are inserted/updated in the master table
                 categories.forEach { insertCategory(it) }
 
-                // Ensure all tags are inserted/updated in the master table
-                tags.forEach { insertTag(it) }
-
                 val values =
                         ContentValues().apply {
-                                put(COLUMN_TAGS_JSON, Gson().toJson(tags))
                                 put(COLUMN_CATEGORIES_JSON, Gson().toJson(categories))
                                 put(COLUMN_UPDATED_AT, System.currentTimeMillis())
                                 put(COLUMN_SYNC_STATUS, SyncStatus.PENDING.name)
@@ -1914,19 +1374,6 @@ class WordDatabase private constructor(context: Context) :
                                 } catch (e: Exception) {
                                         null
                                 },
-                        tags =
-                                try {
-                                        val jsonString =
-                                                CursorUtils.getStringSafe(cursor, COLUMN_TAGS_JSON)
-                                        if (!jsonString.isNullOrEmpty()) {
-                                                val type = object : TypeToken<List<Tag>>() {}.type
-                                                Gson().fromJson<List<Tag>>(jsonString, type)
-                                        } else {
-                                                null
-                                        }
-                                } catch (e: Exception) {
-                                        null
-                                },
                         comments =
                                 try {
                                         val jsonString =
@@ -1947,11 +1394,3 @@ class WordDatabase private constructor(context: Context) :
                 )
         }
 }
-
-data class WordStats(
-        val totalWords: Int,
-        val favoriteWords: Int,
-        val beginnerWords: Int,
-        val intermediateWords: Int,
-        val advancedWords: Int
-)

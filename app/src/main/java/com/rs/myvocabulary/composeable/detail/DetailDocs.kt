@@ -88,7 +88,6 @@ fun DetailDocs(
     // AI suggest stuff
     var showAiSuggestionsDialog by remember { mutableStateOf(false) }
     val isAiSuggesting by appViewModel.isAiSuggesting.collectAsState()
-    val suggestedTags by appViewModel.suggestedTags.collectAsState()
     val suggestedCategories by appViewModel.suggestedCategories.collectAsState()
     val isGeneratingExample by appViewModel.isGeneratingExample.collectAsState()
     var showExampleDialog by remember { mutableStateOf(false) }
@@ -103,33 +102,32 @@ fun DetailDocs(
 
     // Permission launcher
     val permissionLauncher =
-            rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {
-                    isGranted ->
-                if (isGranted) {
-                    showAudioDialog = true
-                }
+        rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { isGranted ->
+            if (isGranted) {
+                showAudioDialog = true
             }
+        }
 
     val fileLauncher =
-            rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris
-                ->
-                uris.forEach { uri ->
-                    val mimeType = context.contentResolver.getType(uri)
-                    val type =
-                            when {
-                                mimeType?.startsWith("image/") == true -> "image"
-                                mimeType?.startsWith("video/") == true -> "video"
-                                mimeType?.startsWith("audio/") == true -> "audio"
-                                else -> "file"
-                            }
-                    attachments.add(
-                            com.rs.myvocabulary.composeable.AttachmentPreview(
-                                    uri = uri,
-                                    type = type
-                            )
+        rememberLauncherForActivityResult(ActivityResultContracts.GetMultipleContents()) { uris
+            ->
+            uris.forEach { uri ->
+                val mimeType = context.contentResolver.getType(uri)
+                val type =
+                    when {
+                        mimeType?.startsWith("image/") == true -> "image"
+                        mimeType?.startsWith("video/") == true -> "video"
+                        mimeType?.startsWith("audio/") == true -> "audio"
+                        else -> "file"
+                    }
+                attachments.add(
+                    com.rs.myvocabulary.composeable.AttachmentPreview(
+                        uri = uri,
+                        type = type
                     )
-                }
+                )
             }
+        }
 
     val coroutineScope = rememberCoroutineScope()
     val state = rememberPullToRefreshState()
@@ -169,7 +167,7 @@ fun DetailDocs(
             attachments.clear()
             note.attachments?.forEach { attachment ->
                 attachments.add(
-                        AttachmentPreview(uri = Uri.parse(attachment.url), type = attachment.type)
+                    AttachmentPreview(uri = Uri.parse(attachment.url), type = attachment.type)
                 )
             }
         }
@@ -181,15 +179,15 @@ fun DetailDocs(
 
             // convert current attachments to CommentAttachment list
             val currentAttachments =
-                    attachments.map { CommentAttachment(url = it.uri.toString(), type = it.type) }
+                attachments.map { CommentAttachment(url = it.uri.toString(), type = it.type) }
 
             val updatedNote =
-                    currentNote.copy(
-                            word = title,
-                            details = content,
-                            updatedAt = System.currentTimeMillis(),
-                            attachments = currentAttachments
-                    )
+                currentNote.copy(
+                    word = title,
+                    details = content,
+                    updatedAt = System.currentTimeMillis(),
+                    attachments = currentAttachments
+                )
             appViewModel.addWord(updatedNote) { error ->
                 isSaving = false
                 if (error == null) {
@@ -200,349 +198,327 @@ fun DetailDocs(
     }
 
     Scaffold(
-            topBar = {
-                TopAppBar(
-                        title = { Text("Note Details") },
-                        navigationIcon = {
-                            IconButton(onClick = onBack) {
-                                Icon(Icons.Default.ChevronLeft, contentDescription = "Back")
-                            }
-                        },
-                        actions = {
-                            if (isReadOnly) {
-                                IconButton(onClick = { isReadOnly = false }) {
-                                    Icon(Icons.Default.Edit, contentDescription = "Edit")
-                                }
-                            } else {
-                                IconButton(onClick = { handleSave() }, enabled = !isSaving) {
-                                    if (isSaving) {
-                                        CircularProgressIndicator(
-                                                modifier = Modifier.size(24.dp),
-                                                strokeWidth = 2.dp
-                                        )
-                                    } else {
-                                        Icon(Icons.Default.Save, contentDescription = "Save")
-                                    }
-                                }
-                            }
-
-                            IconButton(onClick = onOpenDrawer) {
-                                Icon(Icons.Default.Menu, contentDescription = "Menu")
-                            }
-
-                            IconButton(onClick = { showMenu = true }) {
-                                Icon(Icons.Default.MoreVert, contentDescription = "More")
-                            }
-                            DropdownMenu(
-                                    expanded = showMenu,
-                                    onDismissRequest = { showMenu = false }
-                            ) {
-                                DetailDocsMenu(
-                                        expanded = showMenu,
-                                        onDismissRequest = { showMenu = false },
-                                        onSharePost = {
-                                            noteDetail?.let { p ->
-                                                val mediaUrls =
-                                                        p.attachments
-                                                                ?.map { it.url }
-                                                                ?.toMutableList()
-                                                                ?: mutableListOf()
-                                                p.cover?.takeIf { it.isNotEmpty() }?.let {
-                                                    mediaUrls.add(0, it)
-                                                }
-                                                val shareText =
-                                                        "${p.details}\n\nMedia URLs:\n${
-                                                    mediaUrls.joinToString(
-                                                        "\n"
-                                                    )
-                                                }"
-                                                val intent =
-                                                        android.content.Intent(
-                                                                        android.content.Intent
-                                                                                .ACTION_SEND
-                                                                )
-                                                                .apply {
-                                                                    type = "text/plain"
-                                                                    putExtra(
-                                                                            android.content.Intent
-                                                                                    .EXTRA_TEXT,
-                                                                            shareText
-                                                                    )
-                                                                }
-                                                context.startActivity(
-                                                        android.content.Intent.createChooser(
-                                                                intent,
-                                                                "Share Post"
-                                                        )
-                                                )
-                                            }
-                                        },
-                                        onShareMedia = {
-                                            noteDetail?.let { p ->
-                                                val mediaUrls = mutableListOf<String>()
-                                                p.cover?.takeIf { it.isNotEmpty() }?.let {
-                                                    mediaUrls.add(it)
-                                                }
-                                                p.attachments?.forEach { attachment ->
-                                                    attachment.url.takeIf { it.isNotEmpty() }?.let {
-                                                        mediaUrls.add(it)
-                                                    }
-                                                }
-
-                                                val mediaType =
-                                                        p.attachments?.firstOrNull()?.type
-                                                                ?: "media"
-
-                                                if (mediaUrls.isNotEmpty()) {
-                                                    scope.launch {
-                                                        FileSharingHelper.shareMedia(
-                                                                context,
-                                                                mediaUrls,
-                                                                mediaType
-                                                        )
-                                                    }
-                                                } else {
-                                                    android.widget.Toast.makeText(
-                                                                    context,
-                                                                    "No media to share",
-                                                                    android.widget.Toast
-                                                                            .LENGTH_SHORT
-                                                            )
-                                                            .show()
-                                                }
-                                            }
-                                        },
-                                        onAiPostEnhance = {
-                                            noteDetail?.let { word ->
-                                                appViewModel.generateAiPostEnhancement(word) {
-                                                    showAiEnhancementDialog = true
-                                                }
-                                            }
-                                        },
-                                        onAiSuggestions = {
-                                            appViewModel.generateAiSuggestions(
-                                                    noteDetail?.word ?: ""
-                                            ) { showAiSuggestionsDialog = true }
-                                        },
-                                        onAiMixBanglishForVocabullary = {
-                                            noteDetail?.let { word ->
-                                                appViewModel.generateAiBanglishMix(word) {
-                                                    showAiEnhancementDialog = true
-                                                }
-                                            }
-                                        },
-                                        isAiSuggesting = isAiSuggesting,
-                                        onAiExample = {
-                                            appViewModel.generateAiExampleSentences(
-                                                    noteDetail?.word ?: ""
-                                            ) { showExampleDialog = true }
-                                        },
-                                        isGeneratingExample = isGeneratingExample,
-                                        onDelete = {
-                                            noteDetail?.uid?.let { uidToDelete ->
-                                                appViewModel.deleteWord(uidToDelete) { onBack() }
-                                            }
-                                        }
+        topBar = {
+            TopAppBar(
+                title = { Text("Note Details") },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(Icons.Default.ChevronLeft, contentDescription = "Back")
+                    }
+                },
+                actions = {
+                    if (isReadOnly) {
+                        IconButton(onClick = { isReadOnly = false }) {
+                            Icon(Icons.Default.Edit, contentDescription = "Edit")
+                        }
+                    } else {
+                        IconButton(onClick = { handleSave() }, enabled = !isSaving) {
+                            if (isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp
                                 )
+                            } else {
+                                Icon(Icons.Default.Save, contentDescription = "Save")
                             }
                         }
-                )
-            }
+                    }
+
+                    IconButton(onClick = onOpenDrawer) {
+                        Icon(Icons.Default.Menu, contentDescription = "Menu")
+                    }
+
+                    IconButton(onClick = { showMenu = true }) {
+                        Icon(Icons.Default.MoreVert, contentDescription = "More")
+                    }
+                    DropdownMenu(
+                        expanded = showMenu,
+                        onDismissRequest = { showMenu = false }
+                    ) {
+                        DetailDocsMenu(
+                            expanded = showMenu,
+                            onDismissRequest = { showMenu = false },
+                            onSharePost = {
+                                noteDetail?.let { p ->
+                                    val mediaUrls =
+                                        p.attachments
+                                            ?.map { it.url }
+                                            ?.toMutableList()
+                                            ?: mutableListOf()
+                                    p.cover?.takeIf { it.isNotEmpty() }?.let {
+                                        mediaUrls.add(0, it)
+                                    }
+                                    val shareText =
+                                        "${p.details}\n\nMedia URLs:\n${
+                                            mediaUrls.joinToString(
+                                                "\n"
+                                            )
+                                        }"
+                                    val intent =
+                                        android.content.Intent(
+                                            android.content.Intent
+                                                .ACTION_SEND
+                                        )
+                                            .apply {
+                                                type = "text/plain"
+                                                putExtra(
+                                                    android.content.Intent
+                                                        .EXTRA_TEXT,
+                                                    shareText
+                                                )
+                                            }
+                                    context.startActivity(
+                                        android.content.Intent.createChooser(
+                                            intent,
+                                            "Share Post"
+                                        )
+                                    )
+                                }
+                            },
+                            onShareMedia = {
+                                noteDetail?.let { p ->
+                                    val mediaUrls = mutableListOf<String>()
+                                    p.cover?.takeIf { it.isNotEmpty() }?.let {
+                                        mediaUrls.add(it)
+                                    }
+                                    p.attachments?.forEach { attachment ->
+                                        attachment.url.takeIf { it.isNotEmpty() }?.let {
+                                            mediaUrls.add(it)
+                                        }
+                                    }
+
+                                    val mediaType =
+                                        p.attachments?.firstOrNull()?.type
+                                            ?: "media"
+
+                                    if (mediaUrls.isNotEmpty()) {
+                                        scope.launch {
+                                            FileSharingHelper.shareMedia(
+                                                context,
+                                                mediaUrls,
+                                                mediaType
+                                            )
+                                        }
+                                    } else {
+                                        android.widget.Toast.makeText(
+                                            context,
+                                            "No media to share",
+                                            android.widget.Toast
+                                                .LENGTH_SHORT
+                                        )
+                                            .show()
+                                    }
+                                }
+                            },
+                            onAiPostEnhance = {
+                                noteDetail?.let { word ->
+                                    appViewModel.generateAiPostEnhancement(word) {
+                                        showAiEnhancementDialog = true
+                                    }
+                                }
+                            },
+                            onAiSuggestions = {
+                                appViewModel.generateAiSuggestions(
+                                    noteDetail?.word ?: ""
+                                ) { showAiSuggestionsDialog = true }
+                            },
+                            onAiMixBanglishForVocabullary = {
+                                noteDetail?.let { word ->
+                                    appViewModel.generateAiBanglishMix(word) {
+                                        showAiEnhancementDialog = true
+                                    }
+                                }
+                            },
+                            isAiSuggesting = isAiSuggesting,
+                            onAiExample = {
+                                appViewModel.generateAiExampleSentences(
+                                    noteDetail?.word ?: ""
+                                ) { showExampleDialog = true }
+                            },
+                            isGeneratingExample = isGeneratingExample,
+                            onDelete = {
+                                noteDetail?.uid?.let { uidToDelete ->
+                                    appViewModel.deleteWord(uidToDelete) { onBack() }
+                                }
+                            }
+                        )
+                    }
+                }
+            )
+        }
     ) { innerPadding ->
         PullToRefreshBox(
-                state = state,
-                isRefreshing = isRefreshing,
-                onRefresh = { handleRefresh() },
-                modifier = Modifier.padding(innerPadding).fillMaxSize()
+            state = state,
+            isRefreshing = isRefreshing,
+            onRefresh = { handleRefresh() },
+            modifier = Modifier.padding(innerPadding).fillMaxSize()
         ) {
             Column(
-                    modifier =
-                            Modifier.fillMaxSize()
-                                    .verticalScroll(rememberScrollState())
-                                    .padding(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                modifier =
+                    Modifier.fillMaxSize()
+                        .verticalScroll(rememberScrollState())
+                        .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 if (noteDetail != null) {
                     ArticleTitleCard(
-                            isReadOnly = isReadOnly,
-                            title = title,
-                            createdAt = noteDetail?.createdAt ?: 0,
-                            onTitleChange = { title = it }
+                        isReadOnly = isReadOnly,
+                        title = title,
+                        createdAt = noteDetail?.createdAt ?: 0,
+                        onTitleChange = { title = it }
                     )
 
                     if (content.isNotEmpty()) {
                         ArticleContentCard(
-                                isReadOnly = isReadOnly,
-                                content = content,
-                                onContentChange = { content = it }
+                            isReadOnly = isReadOnly,
+                            content = content,
+                            onContentChange = { content = it }
                         )
                     }
 
                     // Media Content
-                    noteDetail?.attachments?.let { attachments ->
-                        attachments.forEach { attachment ->
+                    noteDetail?.attachments?.let { noteAttachments ->
+                        noteAttachments.forEach { attachment ->
                             Spacer(modifier = Modifier.height(8.dp))
                             when (attachment.type) {
                                 "image" -> {
                                     AsyncImage(
-                                            model = attachment.url,
-                                            contentDescription = "Post Image",
-                                            modifier =
-                                                    Modifier.fillMaxWidth()
-                                                            .heightIn(min = 200.dp, max = 500.dp)
-                                                            .clip(RoundedCornerShape(0.dp))
-                                                            .combinedClickable(
-                                                                    onClick = {},
-                                                                    onLongClick = {
-                                                                        // onMediaLongClick not
-                                                                        // defined
-                                                                    }
-                                                            ),
-                                            contentScale = ContentScale.Crop
+                                        model = attachment.url,
+                                        contentDescription = "Post Image",
+                                        modifier =
+                                            Modifier.fillMaxWidth()
+                                                .heightIn(min = 200.dp, max = 500.dp)
+                                                .clip(RoundedCornerShape(0.dp))
+                                                .combinedClickable(
+                                                    onClick = {},
+                                                    onLongClick = {
+                                                        // onMediaLongClick not
+                                                        // defined
+                                                    }
+                                                ),
+                                        contentScale = ContentScale.Crop
                                     )
                                 }
+
                                 "video" -> {
                                     VideoPlayerSection(videoUrl = attachment.url)
                                 }
+
                                 "audio" -> {
                                     AudioAttachmentCard(
-                                            audioUrl = attachment.url,
-                                            fileName = attachment.url.split("/").lastOrNull()
-                                                            ?: "Audio",
-                                            onLongClick = {
-                                                // onMediaLongClick not defined
-                                            }
+                                        audioUrl = attachment.url,
+                                        fileName = attachment.url.split("/").lastOrNull()
+                                            ?: "Audio",
+                                        onLongClick = {
+                                            // onMediaLongClick not defined
+                                        }
                                     )
                                 }
+
                                 "pdf", "document" -> {
                                     PDFAttachmentCard(
-                                            fileUrl = attachment.url,
-                                            fileName = attachment.url.split("/").lastOrNull()
-                                                            ?: "Document",
-                                            onLongClick = {
-                                                // onMediaLongClick not defined
-                                            }
+                                        fileUrl = attachment.url,
+                                        fileName = attachment.url.split("/").lastOrNull()
+                                            ?: "Document",
+                                        onLongClick = {
+                                            // onMediaLongClick not defined
+                                        }
                                     )
                                 }
+
                                 else -> {
                                     // Audio or generic file
                                     GenericFileCard(
-                                            fileUrl = attachment.url,
-                                            fileName = attachment.url.split("/").lastOrNull()
-                                                            ?: "File",
-                                            fileType = attachment.type,
-                                            onLongClick = {
-                                                // onMediaLongClick not defined
-                                            }
+                                        fileUrl = attachment.url,
+                                        fileName = attachment.url.split("/").lastOrNull()
+                                            ?: "File",
+                                        fileType = attachment.type,
+                                        onLongClick = {
+                                            // onMediaLongClick not defined
+                                        }
                                     )
                                 }
                             }
                         }
-                    }
 
-                    // Legacy file URL support (if cover is used as image)
-                    noteDetail?.cover?.takeIf { it.isNotEmpty() }?.let { coverUrl ->
-                        Spacer(modifier = Modifier.height(8.dp))
-                        AsyncImage(
+                        // Legacy file URL support (if cover is used as image)
+                        noteDetail?.cover?.takeIf { it.isNotEmpty() }?.let { coverUrl ->
+                            Spacer(modifier = Modifier.height(8.dp))
+                            AsyncImage(
                                 model = coverUrl,
                                 contentDescription = "Post Image",
                                 modifier =
-                                        Modifier.fillMaxWidth()
-                                                .heightIn(min = 200.dp, max = 500.dp)
-                                                .clip(RoundedCornerShape(0.dp))
-                                                .combinedClickable(
-                                                        onClick = {},
-                                                        onLongClick = {
-                                                            // onMediaLongClick not defined
-                                                        }
-                                                ),
+                                    Modifier.fillMaxWidth()
+                                        .heightIn(min = 200.dp, max = 500.dp)
+                                        .clip(RoundedCornerShape(0.dp))
+                                        .combinedClickable(
+                                            onClick = {},
+                                            onLongClick = {
+                                                // onMediaLongClick not defined
+                                            }
+                                        ),
                                 contentScale = ContentScale.Crop
-                        )
-                    }
+                            )
+                        }
 
-                    // Labels and Tags
-                    if (noteDetail != null &&
-                                    (!noteDetail!!.categories.isNullOrEmpty() ||
-                                            !noteDetail!!.tags.isNullOrEmpty())
-                    ) {
-                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                            if (!noteDetail!!.categories.isNullOrEmpty()) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(
+                        if (!noteDetail!!.categories.isNullOrEmpty()) {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                if (!noteDetail!!.categories.isNullOrEmpty()) {
+                                    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                        Text(
                                             text = "Categories",
                                             style = MaterialTheme.typography.labelLarge,
                                             color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    FlowRow(
+                                        )
+                                        FlowRow(
                                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                                             verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        noteDetail!!.categories?.forEach { category ->
-                                            val chipColor = MaterialTheme.colorScheme.primary
+                                        ) {
+                                            noteDetail!!.categories?.forEach { category ->
+                                                val chipColor = MaterialTheme.colorScheme.primary
 
-                                            AssistChip(
+                                                AssistChip(
                                                     onClick = {},
                                                     label = { Text(category.name) },
                                                     leadingIcon = {
                                                         Icon(
-                                                                Icons.Default.Label,
-                                                                contentDescription = null,
-                                                                tint = chipColor
+                                                            Icons.Default.Label,
+                                                            contentDescription = null,
+                                                            tint = chipColor
                                                         )
                                                     }
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-
-                            if (!noteDetail!!.tags.isNullOrEmpty()) {
-                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                    Text(
-                                            text = "Tags",
-                                            style = MaterialTheme.typography.labelLarge,
-                                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                                    )
-                                    FlowRow(
-                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                                    ) {
-                                        noteDetail!!.tags?.forEach { tag ->
-                                            AssistChip(
-                                                    onClick = {},
-                                                    label = { Text("#${tag.name}") }
-                                            )
+                                                )
+                                            }
                                         }
                                     }
                                 }
                             }
                         }
-                    }
 
-                    val rootComments =
+                        val rootComments =
                             remember(noteDetail?.comments) {
                                 noteDetail?.comments?.filter { it.parentId == null } ?: emptyList()
                             }
 
-                    // comments section here.
-                    rootComments.forEach { comment ->
-                        PostDetailComments(
+                        // comments section here.
+                        rootComments.forEach { comment ->
+                            PostDetailComments(
                                 comment = comment,
                                 post = noteDetail,
                                 setReplyingToCommentId = { replyingToCommentId = it }
-                        )
-                    }
+                            )
+                        }
 
-                    // Add comment section at bottom
-                    CommentInputSection(
+                        // Add comment section at bottom
+                        CommentInputSection(
                             commentText = commentText,
                             onCommentTextChange = { commentText = it },
                             replyingToUsername =
-                                    if (replyingToCommentId != null)
-                                            noteDetail?.comments
-                                                    ?.find { it._id == replyingToCommentId }
-                                                    ?.username
-                                    else null,
+                                if (replyingToCommentId != null)
+                                    noteDetail?.comments
+                                        ?.find { it._id == replyingToCommentId }
+                                        ?.username
+                                else null,
                             onCancelReply = { replyingToCommentId = null },
                             onRecordAudio = {
                                 showAudioDialog = true
@@ -557,30 +533,30 @@ fun DetailDocs(
                                         isSubmittingComment = true
                                         try {
                                             val commentAttachments =
-                                                    attachments.map {
-                                                        CommentAttachment(
-                                                                url = it.uri.toString(),
-                                                                type = it.type
-                                                        )
-                                                    }
+                                                attachments.map {
+                                                    CommentAttachment(
+                                                        url = it.uri.toString(),
+                                                        type = it.type
+                                                    )
+                                                }
 
                                             val newComment =
-                                                    Comment(
-                                                            _id = UUID.randomUUID().toString(),
-                                                            username =
-                                                                    appViewModel
-                                                                            .currentUser
-                                                                            .value
-                                                                            ?.username
-                                                                            ?: "User",
-                                                            parentId = replyingToCommentId,
-                                                            text = commentText,
-                                                            audioUrl = null,
-                                                            mediaUrl = null,
-                                                            mediaType = null,
-                                                            attachments = commentAttachments,
-                                                            createdAt = System.currentTimeMillis()
-                                                    )
+                                                Comment(
+                                                    _id = UUID.randomUUID().toString(),
+                                                    username =
+                                                        appViewModel
+                                                            .currentUser
+                                                            .value
+                                                            ?.username
+                                                            ?: "User",
+                                                    parentId = replyingToCommentId,
+                                                    text = commentText,
+                                                    audioUrl = null,
+                                                    mediaUrl = null,
+                                                    mediaType = null,
+                                                    attachments = commentAttachments,
+                                                    createdAt = System.currentTimeMillis()
+                                                )
 
                                             // Save to local database via AppViewModel
                                             withContext(Dispatchers.IO) {
@@ -601,41 +577,36 @@ fun DetailDocs(
                                 }
                             },
                             isSubmitting = isSubmittingComment
-                    )
-                } else {
-                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                        CircularProgressIndicator()
-                    }
+                        )
+                    }  
                 }
             }
         }
-    }
 
-    if (showAiSuggestionsDialog) {
-        AiSuggestionsDialog(
-                suggestedTags = suggestedTags,
+        if (showAiSuggestionsDialog) {
+            AiSuggestionsDialog(
                 suggestedCategories = suggestedCategories,
                 onDismiss = { showAiSuggestionsDialog = false },
-                onProceed = { tags: List<String>, categories: List<String> ->
-                    appViewModel.applyAiSuggestions(context, uid, tags, categories)
+                onProceed = { categories: List<String> ->
+                    appViewModel.applyAiSuggestions(context, uid, categories)
                     showAiSuggestionsDialog = false
                 }
-        )
-    }
+            )
+        }
 
-    if (showExampleDialog) {
-        AiExampleDialog(
+        if (showExampleDialog) {
+            AiExampleDialog(
                 sentences = generatedExampleSentences,
                 onDismiss = { showExampleDialog = false },
                 onProceed = {
                     appViewModel.insertMultipleComments(uid, generatedExampleSentences)
                     showExampleDialog = false
                 }
-        )
-    }
+            )
+        }
 
-    if (showAiEnhancementDialog) {
-        AiPostEnhancementDialog(
+        if (showAiEnhancementDialog) {
+            AiPostEnhancementDialog(
                 enhancedWord = enhancedWord,
                 enhancedShortMeaning = enhancedShortMeaning,
                 enhancedDetails = enhancedDetails,
@@ -645,6 +616,8 @@ fun DetailDocs(
                     appViewModel.applyAiPostEnhancement(uid, word, meaning, details, categories)
                     showAiEnhancementDialog = false
                 }
-        )
+            )
+        }
     }
+
 }

@@ -20,16 +20,14 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.rs.myvocabulary.database.Label
-import com.rs.myvocabulary.database.Tag
 
 @Composable
 fun AppDrawer(
         drawerState: DrawerState,
         categories: List<Label>,
-        tags: List<Tag>,
         onCategoryClick: (Label) -> Unit,
-        onTagClick: (Tag) -> Unit,
         content: @Composable () -> Unit
 ) {
     ModalNavigationDrawer(
@@ -37,7 +35,8 @@ fun AppDrawer(
                 ModalDrawerSheet {
                     Column(
                             modifier =
-                                    Modifier.padding(horizontal = 8.dp).width(270.dp)
+                                    Modifier.padding(horizontal = 8.dp)
+                                            .width(270.dp)
                                             .verticalScroll(rememberScrollState())
                     ) {
                         Spacer(Modifier.height(12.dp))
@@ -58,7 +57,8 @@ fun AppDrawer(
                         } else {
                             categories.forEach { category ->
                                 NavigationDrawerItem(
-                                        label = { Text(category.name) },
+                                        modifier = Modifier.padding(0.dp).height(30.dp),
+                                        label = { Text(category.name, fontSize = 14.sp) },
                                         selected = false,
                                         icon = {
                                             Icon(
@@ -82,37 +82,6 @@ fun AppDrawer(
                             }
                         }
 
-                        HorizontalDivider(modifier = Modifier.padding(vertical = 12.dp))
-
-                        Text(
-                                "Tags",
-                                modifier = Modifier.padding(8.dp),
-                                style = MaterialTheme.typography.titleLarge
-                        )
-
-                        if (tags.isEmpty()) {
-                            Text(
-                                    "No tags yet",
-                                    modifier = Modifier.padding(8.dp),
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        } else {
-                            tags.forEach { tag ->
-                                NavigationDrawerItem(
-                                        label = { Text(tag.name) },
-                                        selected = false,
-                                        icon = {
-                                            Icon(
-                                                    Icons.Default
-                                                            .Label, // Or a different icon for tags
-                                                    contentDescription = null
-                                            )
-                                        },
-                                        onClick = { onTagClick(tag) }
-                                )
-                            }
-                        }
                         Spacer(Modifier.height(12.dp))
                     }
                 }
