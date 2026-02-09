@@ -30,6 +30,7 @@ fun DetailDocsMenu(
         isAiSuggesting: Boolean,
         onAiExample: () -> Unit,
         isGeneratingExample: Boolean,
+        onAiMixBanglishForVocabullary: () -> Unit,
         onDelete: () -> Unit
 ) {
     DropdownMenu(expanded = expanded, onDismissRequest = onDismissRequest) {
@@ -97,12 +98,19 @@ fun DetailDocsMenu(
                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
         )
         DropdownMenuItem(
-                text = {
-                        Text("Post enhance via AI.")
-                },
+                text = { Text("Post enhance via AI.") },
                 onClick = {
                     onDismissRequest()
                     onAiPostEnhance()
+                },
+                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+        )
+
+        DropdownMenuItem(
+                text = { Text("Ai Banglish Mix") },
+                onClick = {
+                    onDismissRequest()
+                    onAiMixBanglishForVocabullary()
                 },
                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
         )

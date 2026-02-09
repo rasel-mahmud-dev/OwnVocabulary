@@ -788,6 +788,52 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun generateAiBanglishMix(word: Word, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            _isAiSuggesting.value = true
+            try {
+                val aiHelper = UnifiedAiHelper()
+                val prompt =
+                        """
+                    > "Please read the following text.
+                    > Your task is to rewrite the main summary/content of the text in a mix of Bengali and English (Benglish style). Follow these rules:
+                    >  * Identify 10-12 key technical or difficult words from the text.
+                    >  * Write a Bengali paragraph summarizing the text, but replace the selected keywords with their English equivalents (Capitalize the first letter of these English words).
+                    >  * The flow should be natural so that a Bengali speaker can understand the meaning of those English words through context.
+                    >  * At the end, provide a 'Vocabulary List' (not in a table) using bullet points. Each point should include: The English Word — Bengali Meaning: A short English definition/context."
+                    
+                    Text:
+                    ${word.details}
+                    
+                    format the output as a valid JSON object with a single field 'details' containing the rewritten text.
+                """.trimIndent()
+
+                val response = aiHelper.generateContent(prompt)
+                val result = aiHelper.parseResponse(response)
+                if (result != null) {
+                    val cleanedResult =
+                            if (result.contains("```json")) {
+                                result.substringAfter("```json").substringBefore("```").trim()
+                            } else if (result.contains("```")) {
+                                result.substringAfter("```").substringBefore("```").trim()
+                            } else {
+                                result.trim()
+                            }
+
+                    val json = JSONObject(cleanedResult)
+                    _enhancedWord.value = word.word
+                    _enhancedShortMeaning.value = word.shortMeaning
+                    _enhancedDetails.value = json.optString("details", "")
+                    onComplete()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isAiSuggesting.value = false
+            }
+        }
+    }
+
     fun applyAiPostEnhancement(uid: String, word: String, shortMeaning: String, details: String) {
         viewModelScope.launch {
             try {

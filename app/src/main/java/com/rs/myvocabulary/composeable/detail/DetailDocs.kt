@@ -315,6 +315,13 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                                                     noteDetail?.word ?: ""
                                             ) { showAiSuggestionsDialog = true }
                                         },
+                                        onAiMixBanglishForVocabullary = {
+                                            noteDetail?.let { word ->
+                                                appViewModel.generateAiBanglishMix(word) {
+                                                    showAiEnhancementDialog = true
+                                                }
+                                            }
+                                        },
                                         isAiSuggesting = isAiSuggesting,
                                         onAiExample = {
                                             appViewModel.generateAiExampleSentences(
@@ -354,11 +361,11 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                             onTitleChange = { title = it }
                     )
 
-                    if(content.isNotEmpty()){
+                    if (content.isNotEmpty()) {
                         ArticleContentCard(
-                            isReadOnly = isReadOnly,
-                            content = content,
-                            onContentChange = { content = it }
+                                isReadOnly = isReadOnly,
+                                content = content,
+                                onContentChange = { content = it }
                         )
                     }
 
