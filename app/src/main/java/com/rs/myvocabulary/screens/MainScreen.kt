@@ -18,7 +18,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.rs.myvocabulary.composeable.QuickWordView
-import com.rs.myvocabulary.composeable.UnifiedAddDialog
+import com.rs.myvocabulary.composeable.createPost.CreatePostScreen
 import com.rs.myvocabulary.composeable.detail.DetailDocs
 import com.rs.myvocabulary.composeable.docs.CreateDiary
 import com.rs.myvocabulary.composeable.docs.DocsScreen
@@ -327,11 +327,17 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
                 }
             }
 
-            UnifiedAddDialog(
-                    showDialog = showAddDialog,
-                    onDismiss = { showAddDialog = false },
-                    appViewModel = appViewModel
-            )
+            AnimatedVisibility(
+                    visible = showAddDialog,
+                    enter = slideInVertically { it } + fadeIn(),
+                    exit = slideOutVertically { it } + fadeOut()
+            ) {
+                CreatePostScreen(
+                        onPostCreated = { showAddDialog = false },
+                        onDismiss = { showAddDialog = false },
+                        viewModel = appViewModel
+                )
+            }
 
             // QuickWordView overlay for long press
             val longPressItem by appViewModel.longPressItem.collectAsStateWithLifecycle()

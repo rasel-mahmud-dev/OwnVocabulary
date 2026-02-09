@@ -8,6 +8,7 @@ import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.application
 import androidx.lifecycle.viewModelScope
+import com.rs.learnmedia.composeable.createPost.PostAttachment
 import com.rs.myvocabulary.api.UnifiedAiHelper
 import com.rs.myvocabulary.database.Comment
 import com.rs.myvocabulary.database.Label
@@ -33,14 +34,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-
-data class PostAttachment(
-        val uri: Uri? = null,
-        val type: String,
-        val name: String?,
-        val file: File? = null,
-        val remoteUrl: String? = null
-)
 
 data class WordsUiState(
         val items: List<Word> = emptyList(),
@@ -901,64 +894,70 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch {
             _isUploading.value = true
             try {
-                //                val result =
-                //                        withContext(Dispatchers.IO) {
-                //                            val db = WordDatabase.getInstance(context)
-                //
-                //                            // 1. Save attachments locally
-                //                            val savedAttachments =
-                // mutableListOf<CommentAttachment>()
-                //                            for (attachment in attachments) {
-                //                                val path =
-                //                                        if (attachment.uri != null) {
-                //                                            LocalAssetManager.saveAsset(
-                //                                                    context,
-                //                                                    attachment.uri,
-                //                                                    attachment.type == "image"
-                //                                            )
-                //                                        } else {
-                //                                            attachment.remoteUrl
-                //                                        }
-                //
-                //                                if (path != null) {
-                //                                    savedAttachments.add(
-                //                                            CommentAttachment(url = path, type =
-                // attachment.type)
-                //                                    )
-                //                                }
-                //                            }
-                //
-                //                            // 2. Resolve Tags and Categories
-                //                            val allTagsList = db.getAllTags()
-                //                            val finalTags =
-                //                                    selectedTags.mapNotNull { tagName ->
-                //                                        allTagsList.find { it.name == tagName }
-                //                                    }
-                //
-                //                            val allCatsList = db.getAllCategories()
-                //                            val finalCategories =
-                //                                    selectedCategories.mapNotNull { catMap ->
-                //                                        allCatsList.find { it.name ==
-                // catMap["name"] }
-                //                                    }
-                //
-                //                            // 3. Create Post
-                //                            db.createPost(
-                //                                    text = textContent,
-                //                                    fileUrl = null,
-                //                                    fileId = null,
-                //                                    fileType = "mixed",
-                //                                    attachments = savedAttachments,
-                //                                    tags = finalTags,
-                //                                    categories = finalCategories
-                //                            )
-                //                        }
-                //
-                //                if (result != null) {
-                //                    onSuccess()
-                //                } else {
-                //                    onError("Failed to save post")
-                //                }
+                val db = WordDatabase.getInstance(context)
+
+                // 1. Save attachments locally
+                val savedAttachments =
+                        mutableListOf<com.rs.myvocabulary.database.CommentAttachment>()
+                for (attachment in attachments) {
+                    val path =
+                            if (attachment.uri != null) {
+                                com.rs.myvocabulary.utils.LocalAssetManager.saveAsset(
+                                        context,
+                                        attachment.uri!!,
+                                        attachment.type == "image"
+                                )
+                            } else {
+                                attachment.remoteUrl
+                            }
+
+                    if (path != null) {
+                        savedAttachments.add(
+                                com.rs.myvocabulary.database.CommentAttachment(
+                                        url = path,
+                                        type = attachment.type
+                                )
+                        )
+                    }
+                }
+
+                // 2. Resolve Tags and Categories (Creating new objects as we don't have global
+                // lookups)
+                val finalTags =
+                        selectedTags.map { tagName ->
+                            Tag(uid = UUID.randomUUID().toString(), name = tagName)
+                        }
+
+                val finalCategories =
+                        selectedCategories.map { catMap ->
+                            Label(
+                                    uid = UUID.randomUUID().toString(),
+                                    name = catMap["name"] ?: "Unknown",
+                                    parentId = catMap["parentId"],
+                                    color = catMap["color"] ?: "#FF0000"
+                            )
+                        }
+
+                // 3. Create Word object
+                val newWord =
+                        Word(
+                                word = textContent.take(50), // Use first 50 chars as title/word
+                                details = textContent,
+                                type = "word", // Default type for posts
+                                userId = "1", // Updated in actual app
+                                attachments =
+                                        if (savedAttachments.isNotEmpty()) savedAttachments
+                                        else null,
+                                tags = if (finalTags.isNotEmpty()) finalTags else null,
+                                categories =
+                                        if (finalCategories.isNotEmpty()) finalCategories else null,
+                                syncStatus = SyncStatus.PENDING
+                        )
+
+                db.insertWord(newWord)
+                loadData(context)
+                onSuccess()
+                startWordSync()
             } catch (e: Exception) {
                 e.printStackTrace()
                 onError(e.message ?: "Unknown error")
