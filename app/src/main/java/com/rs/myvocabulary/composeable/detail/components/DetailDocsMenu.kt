@@ -5,10 +5,13 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Label
+import androidx.compose.material.icons.filled.AutoFixHigh
+import androidx.compose.material.icons.filled.AutoFixNormal
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PermMedia
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material.icons.filled.ShareLocation
+import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -49,7 +52,7 @@ fun DetailDocsMenu(
                     onDismissRequest()
                     onShareMedia()
                 },
-                leadingIcon = { Icon(Icons.Default.ShareLocation, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Filled.PermMedia, contentDescription = null) }
         )
 
         DropdownMenuItem(
@@ -72,7 +75,7 @@ fun DetailDocsMenu(
                     onAiLabelGenerate()
                 },
                 enabled = !isAiLabelGenerating,
-                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) }
         )
 
         DropdownMenuItem(
@@ -95,7 +98,7 @@ fun DetailDocsMenu(
                     onAiExample()
                 },
                 enabled = !isGeneratingExample,
-                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Filled.AutoFixHigh, contentDescription = null) }
         )
         DropdownMenuItem(
                 text = { Text("Post enhance via AI.") },
@@ -103,7 +106,7 @@ fun DetailDocsMenu(
                     onDismissRequest()
                     onAiPostEnhance()
                 },
-                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Filled.AutoFixNormal, contentDescription = null) }
         )
 
         DropdownMenuItem(
@@ -112,7 +115,7 @@ fun DetailDocsMenu(
                     onDismissRequest()
                     onAiMixBanglishForVocabullary()
                 },
-                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Filled.Translate, contentDescription = null) }
         )
 
         DropdownMenuItem(
