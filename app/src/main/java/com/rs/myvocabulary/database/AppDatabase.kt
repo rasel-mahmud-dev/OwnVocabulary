@@ -138,6 +138,7 @@ class WordDatabase private constructor(context: Context) :
                 // Table and column names
                 private const val TABLE_WORDS = "words"
                 private const val TABLE_CATEGORIES = "categories" // New table
+                private const val TABLE_TAGS = "tags"
 
                 private const val COLUMN_ID = "id"
                 private const val COLUMN_UID = "uid"
@@ -219,6 +220,20 @@ class WordDatabase private constructor(context: Context) :
                 $COLUMN_UID TEXT UNIQUE NOT NULL,
                 $COLUMN_NAME TEXT NOT NULL,
                 $COLUMN_COLOR TEXT DEFAULT '#FF0000',
+                $COLUMN_CREATED_AT INTEGER NOT NULL,
+                $COLUMN_UPDATED_AT INTEGER NOT NULL,
+                $COLUMN_IS_DELETED INTEGER DEFAULT 0,
+                $COLUMN_SYNC_STATUS TEXT DEFAULT 'PENDING'
+            )
+        """.trimIndent()
+                )
+
+                db.execSQL(
+                        """
+            CREATE TABLE IF NOT EXISTS $TABLE_TAGS (
+                $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                $COLUMN_UID TEXT UNIQUE NOT NULL,
+                $COLUMN_NAME TEXT NOT NULL UNIQUE,
                 $COLUMN_CREATED_AT INTEGER NOT NULL,
                 $COLUMN_UPDATED_AT INTEGER NOT NULL,
                 $COLUMN_IS_DELETED INTEGER DEFAULT 0,
@@ -1521,6 +1536,98 @@ class WordDatabase private constructor(context: Context) :
                 return null
         }
 
+        // TAGS OPERATIONS
+
+        fun insertTag(tag: Tag): Long {
+                val db = writableDatabase
+                val values =
+                        ContentValues().apply {
+                                put(COLUMN_UID, tag.uid)
+                                put(COLUMN_NAME, tag.name)
+                                put(COLUMN_CREATED_AT, tag.createdAt)
+                                put(COLUMN_UPDATED_AT, tag.updatedAt)
+                                put(COLUMN_IS_DELETED, if (tag.isDeleted) 1 else 0)
+                                put(COLUMN_SYNC_STATUS, tag.syncStatus.name)
+                        }
+                return db.insertWithOnConflict(
+                        TABLE_TAGS,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_IGNORE // Avoid duplicating tags
+                )
+        }
+
+        fun getAllTags(): List<Tag> {
+                // Ensure table exists (migration fallback for existing installs without strict
+                // versioning)
+                try {
+                        readableDatabase.rawQuery("SELECT 1 FROM $TABLE_TAGS LIMIT 1", null).close()
+                } catch (e: Exception) {
+                        onCreate(writableDatabase)
+                }
+
+                val tags = mutableListOf<Tag>()
+                val db = readableDatabase
+                val cursor =
+                        db.query(
+                                TABLE_TAGS,
+                                null,
+                                "$COLUMN_IS_DELETED = 0",
+                                null,
+                                null,
+                                null,
+                                "$COLUMN_NAME ASC"
+                        )
+
+                while (cursor.moveToNext()) {
+                        tags.add(
+                                Tag(
+                                        id = cursor.getInt(cursor.getColumnIndexOrThrow(COLUMN_ID)),
+                                        uid =
+                                                cursor.getString(
+                                                        cursor.getColumnIndexOrThrow(COLUMN_UID)
+                                                ),
+                                        name =
+                                                cursor.getString(
+                                                        cursor.getColumnIndexOrThrow(COLUMN_NAME)
+                                                ),
+                                        createdAt =
+                                                cursor.getLong(
+                                                        cursor.getColumnIndexOrThrow(
+                                                                COLUMN_CREATED_AT
+                                                        )
+                                                ),
+                                        updatedAt =
+                                                cursor.getLong(
+                                                        cursor.getColumnIndexOrThrow(
+                                                                COLUMN_UPDATED_AT
+                                                        )
+                                                ),
+                                        isDeleted =
+                                                cursor.getInt(
+                                                        cursor.getColumnIndexOrThrow(
+                                                                COLUMN_IS_DELETED
+                                                        )
+                                                ) == 1,
+                                        syncStatus =
+                                                try {
+                                                        SyncStatus.valueOf(
+                                                                cursor.getString(
+                                                                        cursor.getColumnIndexOrThrow(
+                                                                                COLUMN_SYNC_STATUS
+                                                                        )
+                                                                )
+                                                        )
+                                                } catch (e: Exception) {
+                                                        SyncStatus.PENDING
+                                                }
+                                )
+                        )
+                }
+                cursor.close()
+                return tags
+        }
+
         fun getWordByUid(uid: String, callback: (Word?) -> Unit) {
                 Thread {
                                 val db = readableDatabase
@@ -1718,6 +1825,9 @@ class WordDatabase private constructor(context: Context) :
 
                 // Ensure all categories are inserted/updated in the master table
                 categories.forEach { insertCategory(it) }
+
+                // Ensure all tags are inserted/updated in the master table
+                tags.forEach { insertTag(it) }
 
                 val values =
                         ContentValues().apply {

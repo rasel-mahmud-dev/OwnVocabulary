@@ -158,8 +158,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     val backupFiles: StateFlow<List<File>> = _backupFiles.asStateFlow()
 
     // All Tags State
-    private val _allTags = MutableStateFlow<List<String>>(emptyList())
-    val allTags: StateFlow<List<String>> = _allTags.asStateFlow()
+    private val _allTags = MutableStateFlow<List<Tag>>(emptyList())
+    val allTags: StateFlow<List<Tag>> = _allTags.asStateFlow()
 
     // All Categories State
     private val _allCategories = MutableStateFlow<List<Label>>(emptyList())
@@ -209,6 +209,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadAuth()
         loadCategories()
+        loadTags()
     }
 
     // ========== WORD LOADING FUNCTIONS ==========
@@ -293,8 +294,15 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun loadCategories() {
         viewModelScope.launch(Dispatchers.IO) {
-            val cats = db.getAllCategories()
-            _allCategories.value = cats
+            val categories = db.getAllCategories()
+            _allCategories.value = categories
+        }
+    }
+
+    fun loadTags() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val tags = db.getAllTags()
+            _allTags.value = tags
         }
     }
 

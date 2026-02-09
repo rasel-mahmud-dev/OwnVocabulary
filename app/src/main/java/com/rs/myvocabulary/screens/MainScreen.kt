@@ -49,6 +49,7 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
     val clouseWordList by appViewModel.clouseWordList.collectAsState()
     val docsList by appViewModel.docsList.collectAsState()
     val allCategories by appViewModel.allCategories.collectAsState()
+    val allTags by appViewModel.allTags.collectAsState()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -98,10 +99,15 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
     AppDrawer(
             drawerState = drawerState,
             categories = allCategories,
+            tags = allTags,
             onCategoryClick = { category ->
                 scope.launch { drawerState.close() }
                 // Handle category click (filter?) - for now just close
                 // appViewModel.setCategoryFilter(category) // TODO: Implement if needed
+            },
+            onTagClick = { tag ->
+                scope.launch { drawerState.close() }
+                // Handle tag click
             }
     ) {
         Scaffold(
