@@ -118,13 +118,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _isRefreshingTimeline = MutableStateFlow(false)
     val isRefreshingTimeline: StateFlow<Boolean> = _isRefreshingTimeline.asStateFlow()
 
-    // AI Suggesting State
-    private val _isAiSuggesting = MutableStateFlow(false)
-    val isAiSuggesting: StateFlow<Boolean> = _isAiSuggesting.asStateFlow()
+    // AI Label Generate State
+    private val _isAiLabelGenerating = MutableStateFlow(false)
+    val isAiLabelGenerating: StateFlow<Boolean> = _isAiLabelGenerating.asStateFlow()
 
-    // Suggested Categories State
-    private val _suggestedCategories = MutableStateFlow<List<String>>(emptyList())
-    val suggestedCategories: StateFlow<List<String>> = _suggestedCategories.asStateFlow()
+    // Generated Labels State
+    private val _generatedLabels = MutableStateFlow<List<String>>(emptyList())
+    val generatedLabels: StateFlow<List<String>> = _generatedLabels.asStateFlow()
 
     // Generating Example State
     private val _isGeneratingExample = MutableStateFlow(false)
@@ -145,8 +145,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _enhancedDetails = MutableStateFlow("")
     val enhancedDetails: StateFlow<String> = _enhancedDetails.asStateFlow()
 
-    private val _enhancedCategories = MutableStateFlow<List<String>>(emptyList())
-    val enhancedCategories: StateFlow<List<String>> = _enhancedCategories.asStateFlow()
+    private val _enhancedLabels = MutableStateFlow<List<String>>(emptyList())
+    val enhancedLabels: StateFlow<List<String>> = _enhancedLabels.asStateFlow()
 
     // Backup Files State
     private val _backupFiles = MutableStateFlow<List<File>>(emptyList())
@@ -673,9 +673,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     // ========== AI FUNCTIONS ==========
 
-    fun generateAiSuggestions(postText: String, onComplete: () -> Unit) {
+    fun generateAiLabels(postText: String, onComplete: () -> Unit) {
         viewModelScope.launch {
-            _isAiSuggesting.value = true
+            _isAiLabelGenerating.value = true
             try {
                 val aiHelper = UnifiedAiHelper()
                 val prompt =
@@ -705,13 +705,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     val cats = mutableListOf<String>()
                     for (i in 0 until catsArray.length()) cats.add(catsArray.getString(i))
 
-                    _suggestedCategories.value = cats
+                    _generatedLabels.value = cats
                     onComplete()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                _isAiSuggesting.value = false
+                _isAiLabelGenerating.value = false
             }
         }
     }
@@ -752,7 +752,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     }
     fun generateAiPostEnhancement(word: Word, onComplete: () -> Unit) {
         viewModelScope.launch {
-            _isAiSuggesting.value = true
+            _isAiLabelGenerating.value = true
             try {
                 val aiHelper = UnifiedAiHelper()
                 val prompt =
@@ -795,14 +795,14 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                _isAiSuggesting.value = false
+                _isAiLabelGenerating.value = false
             }
         }
     }
 
     fun generateAiBanglishMix(word: Word, onComplete: () -> Unit) {
         viewModelScope.launch {
-            _isAiSuggesting.value = true
+            _isAiLabelGenerating.value = true
             try {
                 val aiHelper = UnifiedAiHelper()
                 val prompt =
@@ -847,47 +847,40 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                             cats.add(catsArray.getString(i))
                         }
                     }
-                    _enhancedCategories.value = cats
+                    _enhancedLabels.value = cats
 
                     onComplete()
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
             } finally {
-                _isAiSuggesting.value = false
+                _isAiLabelGenerating.value = false
             }
         }
     }
 
     fun applyAiPostEnhancement(
-            uid: String,
+            wordId: String,
             word: String,
-            shortMeaning: String,
+            meaning: String,
             details: String,
-            categories: List<String>
+            labels: List<String>
     ) {
-        viewModelScope.launch {
+        viewModelScope.launch(Dispatchers.IO) {
             try {
-                val dbCategories: List<Label> =
-                        categories.map { catName ->
-                            Label(
-                                    uid = UUID.randomUUID().toString(),
-                                    name = catName,
-                                    color = "#FF0000"
-                            )
-                        }
+                val labelObjects = labels.map { Label(name = it, color = "#FF0000") }
 
                 db.updatePartial(
                         WordPartial(
-                                uid = uid,
+                                uid = wordId,
                                 word = word,
-                                shortMeaning = shortMeaning,
+                                shortMeaning = meaning,
                                 details = details,
-                                categories = dbCategories,
+                                categories = labelObjects,
                                 syncStatus = SyncStatus.PENDING
                         )
                 )
-                loadNoteDetailGeneric(uid)
+                loadNoteDetailGeneric(wordId)
                 startWordSync()
             } catch (e: Exception) {
                 e.printStackTrace()
@@ -895,14 +888,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun applyAiSuggestions(context: Context, wordId: String, categories: List<String>) {
+    fun applyAiLabels(context: Context, wordId: String, labels: List<String>) {
         viewModelScope.launch(Dispatchers.IO) {
-            val db = WordDatabase.getInstance(context)
-            val dbCategories: List<Label> =
-                    categories.map { catName ->
-                        Label(uid = UUID.randomUUID().toString(), name = catName, color = "#FF0000")
-                    }
-            db.updateWordCategories(wordId, dbCategories)
+            val labelObjects = labels.map { Label(name = it, color = "#FF0000") }
+            db.updateWordCategories(wordId, labelObjects)
             loadNoteDetailGeneric(wordId)
             startWordSync()
         }

@@ -25,9 +25,9 @@ fun DetailDocsMenu(
         onDismissRequest: () -> Unit,
         onSharePost: () -> Unit,
         onShareMedia: () -> Unit,
-        onAiSuggestions: () -> Unit,
+        onAiLabelGenerate: () -> Unit,
         onAiPostEnhance: () -> Unit,
-        isAiSuggesting: Boolean,
+        isAiLabelGenerating: Boolean,
         onAiExample: () -> Unit,
         isGeneratingExample: Boolean,
         onAiMixBanglishForVocabullary: () -> Unit,
@@ -54,24 +54,24 @@ fun DetailDocsMenu(
 
         DropdownMenuItem(
                 text = {
-                    if (isAiSuggesting) {
+                    if (isAiLabelGenerating) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             CircularProgressIndicator(
                                     modifier = Modifier.size(16.dp),
                                     strokeWidth = 2.dp
                             )
                             Spacer(modifier = Modifier.width(8.dp))
-                            Text("Suggesting...")
+                            Text("Generating Labels...")
                         }
                     } else {
-                        Text("Ai Suggestions")
+                        Text("Ai Label Generate")
                     }
                 },
                 onClick = {
                     onDismissRequest()
-                    onAiSuggestions()
+                    onAiLabelGenerate()
                 },
-                enabled = !isAiSuggesting,
+                enabled = !isAiLabelGenerating,
                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
         )
 

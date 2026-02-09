@@ -15,42 +15,39 @@ import androidx.compose.ui.unit.dp
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun AiSuggestionsDialog(
-        suggestedCategories: List<String>,
+fun AiLabelsDialog(
+        suggestedLabels: List<String>,
         onDismiss: () -> Unit,
-        onProceed: (categories: List<String>) -> Unit
+        onProceed: (labels: List<String>) -> Unit
 ) {
     AlertDialog(
             onDismissRequest = onDismiss,
-            title = { Text("AI Suggestions") },
+            title = { Text("AI Label Generate") },
             text = {
                 Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (suggestedCategories.isNotEmpty()) {
+                    if (suggestedLabels.isNotEmpty()) {
                         Column {
-                            Text(
-                                    "Suggested Categories:",
-                                    style = MaterialTheme.typography.labelLarge
-                            )
+                            Text("Suggested Labels:", style = MaterialTheme.typography.labelLarge)
                             FlowRow(
                                     horizontalArrangement = Arrangement.spacedBy(8.dp),
                                     verticalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                suggestedCategories.forEach { category ->
-                                    AssistChip(onClick = {}, label = { Text(category) })
+                                suggestedLabels.forEach { label ->
+                                    AssistChip(onClick = {}, label = { Text(label) })
                                 }
                             }
                         }
                     }
 
-                    if (suggestedCategories.isEmpty()) {
+                    if (suggestedLabels.isEmpty()) {
                         Text("No suggestions found.")
                     }
                 }
             },
             confirmButton = {
                 Button(
-                        onClick = { onProceed(suggestedCategories) },
-                        enabled = suggestedCategories.isNotEmpty()
+                        onClick = { onProceed(suggestedLabels) },
+                        enabled = suggestedLabels.isNotEmpty()
                 ) { Text("Proceed") }
             },
             dismissButton = { TextButton(onClick = onDismiss) { Text("Dismiss") } }
