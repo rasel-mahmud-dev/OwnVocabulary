@@ -230,11 +230,6 @@ fun DetailDocs(
 
                             IconButton(onClick = { showMenu = true }) {
                                 Icon(Icons.Default.MoreVert, contentDescription = "More")
-                            }
-                            DropdownMenu(
-                                    expanded = showMenu,
-                                    onDismissRequest = { showMenu = false }
-                            ) {
                                 DetailDocsMenu(
                                         expanded = showMenu,
                                         onDismissRequest = { showMenu = false },
