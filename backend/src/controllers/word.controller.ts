@@ -1,7 +1,7 @@
 import RepositoryBase from "../respository/repository.base";
-import {Request, Response} from "express"
+import { Request, Response } from "express"
 import date from "../utils/date";
-import {ObjectId} from "bson";
+import { ObjectId } from "bson";
 
 // _id
 // userId user unique id
@@ -25,6 +25,10 @@ export type TWord = {
     retryCount?: number
     details?: string
     lastSyncAttempt?: string | Date
+    categories?: any[]
+    tags?: any[]
+    attachments?: any[]
+    comments?: any[]
 }
 
 export function getAuthId(req: any) {
@@ -62,9 +66,13 @@ class WordController {
             syncStatus,
             retryCount,
             lastSyncAttempt,
+            categories,
+            tags,
+            attachments,
+            comments,
         } = req.body
 
-        console.log(word)
+        console.log("Updating word:", req.body)
 
         if (!word) {
             throw Error("Word required")
@@ -85,20 +93,24 @@ class WordController {
             lastViewedDaysAgo,
             retryCount,
             lastSyncAttempt,
+            categories: categories || [],
+            tags: tags || [],
+            attachments: attachments || [],
+            comments: comments || [],
             syncStatus: "synced",
             updatedAt: Number(updatedAt) || date.now(),
             createdAt: Number(createdAt) || date.now(),
         })
 
-        res.status(200).json({message: "Successfully updated"})
+        res.status(200).json({ message: "Successfully updated" })
     }
 
     async wordPull(req: Request, res: Response) {
         const since = Number(req.query?.since) || 0
         const limit = 50
-        const query = {updatedAt: {$gt: Number(since)}};
+        const query = { updatedAt: { $gt: Number(since) } };
         const items = await RepositoryBase.findAll("word", query, {
-            sort: {updatedAt: 1},
+            sort: { updatedAt: 1 },
             limit: limit
         })
 

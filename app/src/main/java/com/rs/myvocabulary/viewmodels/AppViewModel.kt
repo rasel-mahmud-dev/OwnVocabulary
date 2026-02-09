@@ -17,19 +17,7 @@ import com.rs.myvocabulary.database.Tag
 import com.rs.myvocabulary.database.Word
 import com.rs.myvocabulary.database.WordDatabase
 import com.rs.myvocabulary.database.WordPartial
-import com.rs.myvocabulary.sync.PullCategoryJob
-import com.rs.myvocabulary.sync.PullCommentJob
-import com.rs.myvocabulary.sync.PullNoteCategoryJob
-import com.rs.myvocabulary.sync.PullPostCommentJob
-import com.rs.myvocabulary.sync.PullPostTagJob
-import com.rs.myvocabulary.sync.PullTagJob
 import com.rs.myvocabulary.sync.PullWordJob
-import com.rs.myvocabulary.sync.PushCategoryJob
-import com.rs.myvocabulary.sync.PushCommentJob
-import com.rs.myvocabulary.sync.PushNoteCategoryJob
-import com.rs.myvocabulary.sync.PushPostCommentJob
-import com.rs.myvocabulary.sync.PushPostTagJob
-import com.rs.myvocabulary.sync.PushTagJob
 import com.rs.myvocabulary.sync.PushWordJob
 import com.rs.myvocabulary.utils.BackupUtils
 import java.io.File
@@ -158,6 +146,16 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _generatedExampleSentences = MutableStateFlow<List<String>>(emptyList())
     val generatedExampleSentences: StateFlow<List<String>> =
             _generatedExampleSentences.asStateFlow()
+
+    // AI Enhancement States
+    private val _enhancedWord = MutableStateFlow("")
+    val enhancedWord: StateFlow<String> = _enhancedWord.asStateFlow()
+
+    private val _enhancedShortMeaning = MutableStateFlow("")
+    val enhancedShortMeaning: StateFlow<String> = _enhancedShortMeaning.asStateFlow()
+
+    private val _enhancedDetails = MutableStateFlow("")
+    val enhancedDetails: StateFlow<String> = _enhancedDetails.asStateFlow()
 
     // Backup Files State
     private val _backupFiles = MutableStateFlow<List<File>>(emptyList())
@@ -557,7 +555,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
     fun deleteWordComment(commentId: String, wordId: String) {
         viewModelScope.launch(Dispatchers.IO) {
-            db.deletePostComment(commentId)
+            db.deletePostComment(commentId, wordId)
             loadNoteDetailGeneric(wordId)
         }
     }
@@ -573,7 +571,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                                 createdAt = System.currentTimeMillis()
                         )
                     }
-            newComments.forEach { comment -> insertWordComment(wordId, comment) }
+            db.insertMultipleComments(wordId, newComments)
+            loadNoteDetailGeneric(wordId)
+            startWordSync()
         }
     }
 
@@ -610,92 +610,12 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     try {
                         val isConnected = { isNetworkAvailable(context = application) }
 
-                        // 1. Sync Tags
-                        launch {
-                            PushTagJob(
-                                            isConnected = isConnected,
-                                            getUnsyncedTags = { db.getUnsyncedTags() },
-                                            updateSyncStatus = {
-                                                db.updateTagSyncStatus(it, SyncStatus.SYNCED)
-                                            }
-                                    )
-                                    .startPushing()
-                        }
-
-                        // 2. Sync Categories
-                        launch {
-                            PushCategoryJob(
-                                            isConnected = isConnected,
-                                            getUnsyncedCategories = { db.getUnsyncedCategories() },
-                                            updateSyncStatus = {
-                                                db.updateCategorySyncStatus(it, SyncStatus.SYNCED)
-                                            }
-                                    )
-                                    .startPushing()
-                        }
-
-                        // 3. Sync Comments
-                        launch {
-                            PushCommentJob(
-                                            isConnected = isConnected,
-                                            getUnsyncedComments = { db.getUnsyncedComments() },
-                                            updateSyncStatus = {
-                                                db.updateCommentSyncStatus(it, SyncStatus.SYNCED)
-                                            }
-                                    )
-                                    .startPushing()
-                        }
-
-                        // 4. Sync PostComments
-                        launch {
-                            PushPostCommentJob(
-                                            isConnected = isConnected,
-                                            getUnsyncedComments = { db.getUnsyncedPostComments() },
-                                            updateSyncStatus = {
-                                                db.updatePostCommentSyncStatus(
-                                                        it,
-                                                        SyncStatus.SYNCED
-                                                )
-                                            }
-                                    )
-                                    .startPushing()
-                        }
-
-                        // 5. Sync PostTags (Associations)
-                        launch {
-                            PushPostTagJob(
-                                            isConnected = isConnected,
-                                            getUnsyncedPostTags = { db.getUnsyncedPostTags() },
-                                            updateSyncStatus = {
-                                                db.updatePostTagSyncStatus(it, SyncStatus.SYNCED)
-                                            }
-                                    )
-                                    .startPushing()
-                        }
-
-                        // 6. Sync NoteCategories (Associations)
-                        launch {
-                            PushNoteCategoryJob(
-                                            isConnected = isConnected,
-                                            getUnsyncedNoteCategories = {
-                                                db.getUnsyncedNoteCategories()
-                                            },
-                                            updateSyncStatus = {
-                                                db.updateNoteCategorySyncStatus(
-                                                        it,
-                                                        SyncStatus.SYNCED
-                                                )
-                                            }
-                                    )
-                                    .startPushing()
-                        }
-
                         // 7. Sync Words (Posts)
                         launch {
                             PushWordJob(
                                             isConnected = isConnected,
-                                            getUnsyncedNotes = { db.getUnsyncedWords() },
-                                            updateNoteSyncStatus = { id, _ ->
+                                            getUnsyncedWords = { db.getUnsyncedWords() },
+                                            updateWordSyncStatus = { id, _ ->
                                                 db.updateWordSyncStatus(id, SyncStatus.SYNCED)
                                             }
                                     )
@@ -718,53 +638,8 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                         launch {
                             PullWordJob(
                                             isConnected = isConnected,
-                                            saveNotes = { db.upsertWord(it) },
+                                            saveWords = { db.upsertWord(it) },
                                             onSyncComplete = { loadNote() }
-                                    )
-                                    .startPulling()
-                        }
-
-                        launch {
-                            PullTagJob(isConnected = isConnected, saveTags = { db.upsertTags(it) })
-                                    .startPulling()
-                        }
-
-                        launch {
-                            PullCategoryJob(
-                                            isConnected = isConnected,
-                                            saveCategories = { db.upsertCategories(it) }
-                                    )
-                                    .startPulling()
-                        }
-
-                        launch {
-                            PullCommentJob(
-                                            isConnected = isConnected,
-                                            saveComments = { db.upsertComments(it) }
-                                    )
-                                    .startPulling()
-                        }
-
-                        launch {
-                            PullPostCommentJob(
-                                            isConnected = isConnected,
-                                            savePostComments = { db.upsertPostComments(it) }
-                                    )
-                                    .startPulling()
-                        }
-
-                        launch {
-                            PullPostTagJob(
-                                            isConnected = isConnected,
-                                            savePostTags = { db.upsertPostTags(it) }
-                                    )
-                                    .startPulling()
-                        }
-
-                        launch {
-                            PullNoteCategoryJob(
-                                            isConnected = isConnected,
-                                            saveNoteCategories = { db.upsertNoteCategories(it) }
                                     )
                                     .startPulling()
                         }
@@ -870,6 +745,75 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+    fun generateAiPostEnhancement(word: Word, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            _isAiSuggesting.value = true
+            try {
+                val aiHelper = UnifiedAiHelper()
+                val prompt =
+                        """
+                    Enhance the following vocabulary entry and return ONLY a valid JSON object.
+                    
+                    Instructions for fields:
+                    1. 'word': Improve the word itself if misspelled or incomplete.
+                    2. 'shortMeaning': Provide a concise and clear meaning.
+                    3. 'details': Write a rich, natural, human-readable description. Use markdown (bold, lists, etc.) if helpful. 
+                    
+                    CRITICAL: The entire output must be a single valid JSON object. 
+                    The 'details' field must be a valid JSON string (wrap the content in double quotes and escape any internal quotes or newlines as needed). 
+                    DO NOT include any text before or after the JSON.
+                    
+                    Current Entry:
+                    Word: ${word.word}
+                    Short Meaning: ${word.shortMeaning}
+                    Details: ${word.details}
+                """.trimIndent()
+
+                val response = aiHelper.generateContent(prompt)
+                val result = aiHelper.parseResponse(response)
+                if (result != null) {
+                    val cleanedResult =
+                            if (result.contains("```json")) {
+                                result.substringAfter("```json").substringBefore("```").trim()
+                            } else if (result.contains("```")) {
+                                result.substringAfter("```").substringBefore("```").trim()
+                            } else {
+                                result.trim()
+                            }
+
+                    val json = JSONObject(cleanedResult)
+                    _enhancedWord.value = json.optString("word", word.word)
+                    _enhancedShortMeaning.value = json.optString("shortMeaning", word.shortMeaning)
+                    _enhancedDetails.value = json.optString("details", word.details)
+                    onComplete()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isAiSuggesting.value = false
+            }
+        }
+    }
+
+    fun applyAiPostEnhancement(uid: String, word: String, shortMeaning: String, details: String) {
+        viewModelScope.launch {
+            try {
+                db.updatePartial(
+                        WordPartial(
+                                uid = uid,
+                                word = word,
+                                shortMeaning = shortMeaning,
+                                details = details,
+                                syncStatus = SyncStatus.PENDING
+                        )
+                )
+                loadNoteDetailGeneric(uid)
+                startWordSync()
+            } catch (e: Exception) {
+                e.printStackTrace()
+            }
+        }
+    }
 
     fun applyAiSuggestions(
             context: Context,
@@ -880,18 +824,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         viewModelScope.launch(Dispatchers.IO) {
             val db = WordDatabase.getInstance(context)
             val dbTags: List<Tag> =
-                    tags.map { tagName ->
-                        db.getTagByName(tagName)
-                                ?: Tag(uid = UUID.randomUUID().toString(), name = tagName)
-                    }
+                    tags.map { tagName -> Tag(uid = UUID.randomUUID().toString(), name = tagName) }
             val dbCategories: List<Label> =
                     categories.map { catName ->
-                        db.getCategoryByName(catName)
-                                ?: Label(
-                                        uid = UUID.randomUUID().toString(),
-                                        name = catName,
-                                        color = "#FF0000"
-                                )
+                        Label(uid = UUID.randomUUID().toString(), name = catName, color = "#FF0000")
                     }
 
             db.updateWordTagsAndCategories(wordId, dbTags, dbCategories)
@@ -1068,16 +1004,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
     */
-
-    fun getTagByName(context: Context, name: String): Tag? {
-        val db = WordDatabase.getInstance(context)
-        return db.getTagByName(name)
-    }
-
-    fun getCategoryByName(context: Context, name: String): Label? {
-        val db = WordDatabase.getInstance(context)
-        return db.getCategoryByName(name)
-    }
 
     // ========== PRACTICE FUNCTIONS ==========
 

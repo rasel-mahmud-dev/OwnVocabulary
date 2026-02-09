@@ -7,10 +7,6 @@ import android.os.Environment
 import android.provider.MediaStore
 import com.google.gson.GsonBuilder
 import com.google.gson.reflect.TypeToken
-import com.rs.myvocabulary.database.Label
-import com.rs.myvocabulary.database.NoteCategory
-import com.rs.myvocabulary.database.PostTag
-import com.rs.myvocabulary.database.Tag
 import com.rs.myvocabulary.database.Word
 import com.rs.myvocabulary.database.WordDatabase
 import java.io.BufferedInputStream
@@ -39,31 +35,11 @@ object BackupUtils {
         val gson = GsonBuilder().setPrettyPrinting().create()
 
         try {
-            // 1. Export Posts
-            val posts = db.getAllWords()
-            File(exportDir, "posts.json").writeText(gson.toJson(posts))
+            // 2. Export Words (includes embedded comments, tags, categories)
+            val words = db.getAllWords()
+            File(exportDir, "posts.json").writeText(gson.toJson(words))
 
-            // 2. Export Comments
-            val comments = db.getAllComments()
-            File(exportDir, "comments.json").writeText(gson.toJson(comments))
-
-            // 3. Export Tags
-            val tags = db.getAllTags()
-            File(exportDir, "tags.json").writeText(gson.toJson(tags))
-
-            // 4. Export Categories
-            val categories = db.getAllCategories()
-            File(exportDir, "categories.json").writeText(gson.toJson(categories))
-
-            // 5. Export Note Categories (linking table)
-            val noteCategories = db.getAllNoteCategories()
-            File(exportDir, "note_categories.json").writeText(gson.toJson(noteCategories))
-
-            // 6. Export Post Tags (linking table)
-            val postTags = db.getAllPostTags()
-            File(exportDir, "post_tags.json").writeText(gson.toJson(postTags))
-
-            // 7. Zip the JSON files into a data folder
+            // 4. Zip the JSON files into a data folder
             val backupDir = context.getExternalFilesDir("backups")
             if (backupDir == null || (!backupDir.exists() && !backupDir.mkdirs())) {
                 return null
@@ -82,9 +58,7 @@ object BackupUtils {
                     zos.closeEntry()
                 }
 
-                // Now add assets as a zip within this zip?
-                // "in another dir all assets as zip format"
-                // Let's create the assets zip first
+                // Add assets as a zip within this zip
                 val assetsZip = createAssetsBackup(context)
                 if (assetsZip != null) {
                     zos.putNextEntry(ZipEntry("assets/${assetsZip.name}"))
@@ -153,53 +127,20 @@ object BackupUtils {
             if (!jsonDir.exists()) return false
 
             val gson = GsonBuilder().create()
-
-            // 2. Clear Database
             val db = WordDatabase.getInstance(context)
-            //            db.clearAllData()
 
-            // 3. Restore Categories
-            val categoriesFile = File(jsonDir, "categories.json")
-            if (categoriesFile.exists()) {
-                val type = object : TypeToken<List<Label>>() {}.type
-                gson.fromJson<List<Label>>(categoriesFile.readText(), type)
-                // db.insertCategories(categories)
-            }
+            // 2. Clear Database before restoration
+            db.clearAllData()
 
-            // 4. Restore Tags
-            val tagsFile = File(jsonDir, "tags.json")
-            if (tagsFile.exists()) {
-                val type = object : TypeToken<List<Tag>>() {}.type
-                gson.fromJson<List<Tag>>(tagsFile.readText(), type)
-                // db.insertTags(tags)
-            }
-
-            // 5. Restore Posts (includes comments)
+            // 5. Restore Words (includes embedded comments, tags, categories)
             val postsFile = File(jsonDir, "posts.json")
             if (postsFile.exists()) {
                 val type = object : TypeToken<List<Word>>() {}.type
                 val posts: List<Word> = gson.fromJson(postsFile.readText(), type)
-                //                db.insertPosts(posts)
+                db.insertWords(posts)
             }
 
-            // 6. Restore Note Categories
-            val noteCategoriesFile = File(jsonDir, "note_categories.json")
-            if (noteCategoriesFile.exists()) {
-                val type = object : TypeToken<List<NoteCategory>>() {}.type
-                val noteCategories: List<NoteCategory> =
-                        gson.fromJson(noteCategoriesFile.readText(), type)
-                db.insertNoteCategories(noteCategories)
-            }
-
-            // 7. Restore Post Tags
-            val postTagsFile = File(jsonDir, "post_tags.json")
-            if (postTagsFile.exists()) {
-                val type = object : TypeToken<List<PostTag>>() {}.type
-                val postTags: List<PostTag> = gson.fromJson(postTagsFile.readText(), type)
-                db.insertPostTags(postTags)
-            }
-
-            // 8. Restore Assets
+            // 6. Restore Assets
             val assetsZipFile = assetsDir.listFiles()?.find { it.name.endsWith(".zip") }
             if (assetsZipFile != null) {
                 val finalAssetsDir = context.getExternalFilesDir("media")

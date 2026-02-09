@@ -24,7 +24,6 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalContext
@@ -41,6 +40,7 @@ import com.rs.myvocabulary.composeable.detail.components.ArticleContentCard
 import com.rs.myvocabulary.composeable.detail.components.ArticleTitleCard
 import com.rs.myvocabulary.composeable.detail.components.DetailDocsMenu
 import com.rs.myvocabulary.composeable.dialogs.AiExampleDialog
+import com.rs.myvocabulary.composeable.dialogs.AiPostEnhancementDialog
 import com.rs.myvocabulary.composeable.dialogs.AiSuggestionsDialog
 import com.rs.myvocabulary.database.Comment
 import com.rs.myvocabulary.database.CommentAttachment
@@ -87,6 +87,12 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
     val isGeneratingExample by appViewModel.isGeneratingExample.collectAsState()
     var showExampleDialog by remember { mutableStateOf(false) }
     val generatedExampleSentences by appViewModel.generatedExampleSentences.collectAsState()
+
+    // AI enhancement stuff
+    var showAiEnhancementDialog by remember { mutableStateOf(false) }
+    val enhancedWord by appViewModel.enhancedWord.collectAsState()
+    val enhancedShortMeaning by appViewModel.enhancedShortMeaning.collectAsState()
+    val enhancedDetails by appViewModel.enhancedDetails.collectAsState()
 
     // Permission launcher
     val permissionLauncher =
@@ -297,6 +303,13 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                                                 }
                                             }
                                         },
+                                        onAiPostEnhance = {
+                                            noteDetail?.let { word ->
+                                                appViewModel.generateAiPostEnhancement(word) {
+                                                    showAiEnhancementDialog = true
+                                                }
+                                            }
+                                        },
                                         onAiSuggestions = {
                                             appViewModel.generateAiSuggestions(
                                                     noteDetail?.word ?: ""
@@ -341,11 +354,13 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                             onTitleChange = { title = it }
                     )
 
-                    ArticleContentCard(
+                    if(content.isNotEmpty()){
+                        ArticleContentCard(
                             isReadOnly = isReadOnly,
                             content = content,
                             onContentChange = { content = it }
-                    )
+                        )
+                    }
 
                     // Media Content
                     noteDetail?.attachments?.let { attachments ->
@@ -429,6 +444,65 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                         )
                     }
 
+                    // Labels and Tags
+                    if (noteDetail != null &&
+                                    (!noteDetail!!.categories.isNullOrEmpty() ||
+                                            !noteDetail!!.tags.isNullOrEmpty())
+                    ) {
+                        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                            if (!noteDetail!!.categories.isNullOrEmpty()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                            text = "Categories",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        noteDetail!!.categories?.forEach { category ->
+                                            val chipColor = MaterialTheme.colorScheme.primary
+
+                                            AssistChip(
+                                                    onClick = {},
+                                                    label = { Text(category.name) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                                Icons.Default.Label,
+                                                                contentDescription = null,
+                                                                tint = chipColor
+                                                        )
+                                                    }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+
+                            if (!noteDetail!!.tags.isNullOrEmpty()) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text(
+                                            text = "Tags",
+                                            style = MaterialTheme.typography.labelLarge,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    FlowRow(
+                                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                                            verticalArrangement = Arrangement.spacedBy(8.dp)
+                                    ) {
+                                        noteDetail!!.tags?.forEach { tag ->
+                                            AssistChip(
+                                                    onClick = {},
+                                                    label = { Text("#${tag.name}") }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+
                     val rootComments =
                             remember(noteDetail?.comments) {
                                 noteDetail?.comments?.filter { it.parentId == null } ?: emptyList()
@@ -445,142 +519,80 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
 
                     // Add comment section at bottom
                     CommentInputSection(
-                        commentText = commentText,
-                        onCommentTextChange = { commentText = it },
-                        replyingToUsername =
-                            if (replyingToCommentId != null)
-                                noteDetail?.comments
-                                    ?.find { it._id == replyingToCommentId }
-                                    ?.username
-                            else null,
-                        onCancelReply = { replyingToCommentId = null },
-                        onRecordAudio = {
-                            showAudioDialog = true
-                            permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
-                        },
-                        onAttachment = { fileLauncher.launch("*/*") },
-                        attachments = attachments,
-                        onRemoveAttachment = { attachments.remove(it) },
-                        onSendComment = {
-                            if (commentText.isNotBlank() || attachments.isNotEmpty()) {
-                                scope.launch {
-                                    isSubmittingComment = true
-                                    try {
-                                        val commentAttachments =
-                                            attachments.map {
-                                                CommentAttachment(
-                                                    url = it.uri.toString(),
-                                                    type = it.type
-                                                )
+                            commentText = commentText,
+                            onCommentTextChange = { commentText = it },
+                            replyingToUsername =
+                                    if (replyingToCommentId != null)
+                                            noteDetail?.comments
+                                                    ?.find { it._id == replyingToCommentId }
+                                                    ?.username
+                                    else null,
+                            onCancelReply = { replyingToCommentId = null },
+                            onRecordAudio = {
+                                showAudioDialog = true
+                                permissionLauncher.launch(android.Manifest.permission.RECORD_AUDIO)
+                            },
+                            onAttachment = { fileLauncher.launch("*/*") },
+                            attachments = attachments,
+                            onRemoveAttachment = { attachments.remove(it) },
+                            onSendComment = {
+                                if (commentText.isNotBlank() || attachments.isNotEmpty()) {
+                                    scope.launch {
+                                        isSubmittingComment = true
+                                        try {
+                                            val commentAttachments =
+                                                    attachments.map {
+                                                        CommentAttachment(
+                                                                url = it.uri.toString(),
+                                                                type = it.type
+                                                        )
+                                                    }
+
+                                            val newComment =
+                                                    Comment(
+                                                            _id = UUID.randomUUID().toString(),
+                                                            username =
+                                                                    appViewModel
+                                                                            .currentUser
+                                                                            .value
+                                                                            ?.username
+                                                                            ?: "User",
+                                                            parentId = replyingToCommentId,
+                                                            text = commentText,
+                                                            audioUrl = null,
+                                                            mediaUrl = null,
+                                                            mediaType = null,
+                                                            attachments = commentAttachments,
+                                                            createdAt = System.currentTimeMillis()
+                                                    )
+
+                                            // Save to local database via AppViewModel
+                                            withContext(Dispatchers.IO) {
+                                                appViewModel.insertWordComment(uid, newComment)
+                                                // Reload details to show new comment
+                                                loadNoteDetail(uid)
                                             }
 
-                                        val newComment =
-                                            Comment(
-                                                _id = UUID.randomUUID().toString(),
-                                                username = appViewModel.currentUser.value?.username
-                                                    ?: "User",
-                                                parentId = replyingToCommentId,
-                                                text = commentText,
-                                                audioUrl = null,
-                                                mediaUrl = null,
-                                                mediaType = null,
-                                                attachments = commentAttachments,
-                                                createdAt = System.currentTimeMillis()
-                                            )
-
-                                        // Save to local database via AppViewModel
-                                        withContext(Dispatchers.IO) {
-                                            appViewModel.insertWordComment( uid, newComment)
-                                            // Reload details to show new comment
-                                            loadNoteDetail(uid)
+                                            commentText = ""
+                                            attachments.clear()
+                                            replyingToCommentId = null
+                                        } catch (e: Exception) {
+                                            e.printStackTrace()
+                                        } finally {
+                                            isSubmittingComment = false
                                         }
-
-                                        commentText = ""
-                                        attachments.clear()
-                                        replyingToCommentId = null
-                                    } catch (e: Exception) {
-                                        e.printStackTrace()
-                                    } finally {
-                                        isSubmittingComment = false
                                     }
                                 }
-                            }
-                        },
-                        isSubmitting = isSubmittingComment
+                            },
+                            isSubmitting = isSubmittingComment
                     )
-
                 } else {
                     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
                 }
             }
-
-            // Labels and Tags
-            if (noteDetail != null &&
-                            (!noteDetail!!.categories.isNullOrEmpty() ||
-                                    !noteDetail!!.tags.isNullOrEmpty())
-            ) {
-                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    if (!noteDetail!!.categories.isNullOrEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                    text = "Categories",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                noteDetail!!.categories?.forEach { category ->
-                                    val chipColor =
-                                            MaterialTheme.colorScheme.primary
-
-                                    AssistChip(
-                                            onClick = {},
-                                            label = { Text(category.name) },
-                                            leadingIcon = {
-                                                Icon(
-                                                        Icons.Default.Label,
-                                                        contentDescription = null,
-                                                        tint = chipColor
-                                                )
-                                            }
-                                    )
-                                }
-                            }
-                        }
-                    }
-
-                    if (!noteDetail!!.tags.isNullOrEmpty()) {
-                        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                            Text(
-                                    text = "Tags",
-                                    style = MaterialTheme.typography.labelLarge,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            FlowRow(
-                                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                            ) {
-                                noteDetail!!.tags?.forEach { tag ->
-                                    AssistChip(onClick = {}, label = { Text("#${tag.name}") })
-                                }
-                            }
-                        }
-                    }
-                }
-
-
-
-            }
-
-
-
         }
-
-
     }
 
     if (showAiSuggestionsDialog) {
@@ -600,8 +612,21 @@ fun DetailDocs(uid: String, appViewModel: AppViewModel, onBack: () -> Unit) {
                 sentences = generatedExampleSentences,
                 onDismiss = { showExampleDialog = false },
                 onProceed = {
-                    appViewModel.insertMultipleComments( uid, generatedExampleSentences)
+                    appViewModel.insertMultipleComments(uid, generatedExampleSentences)
                     showExampleDialog = false
+                }
+        )
+    }
+
+    if (showAiEnhancementDialog) {
+        AiPostEnhancementDialog(
+                enhancedWord = enhancedWord,
+                enhancedShortMeaning = enhancedShortMeaning,
+                enhancedDetails = enhancedDetails,
+                onDismiss = { showAiEnhancementDialog = false },
+                onProceed = { word, meaning, details ->
+                    appViewModel.applyAiPostEnhancement(uid, word, meaning, details)
+                    showAiEnhancementDialog = false
                 }
         )
     }

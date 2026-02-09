@@ -26,6 +26,7 @@ fun DetailDocsMenu(
         onSharePost: () -> Unit,
         onShareMedia: () -> Unit,
         onAiSuggestions: () -> Unit,
+        onAiPostEnhance: () -> Unit,
         isAiSuggesting: Boolean,
         onAiExample: () -> Unit,
         isGeneratingExample: Boolean,
@@ -93,6 +94,16 @@ fun DetailDocsMenu(
                     onAiExample()
                 },
                 enabled = !isGeneratingExample,
+                leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
+        )
+        DropdownMenuItem(
+                text = {
+                        Text("Post enhance via AI.")
+                },
+                onClick = {
+                    onDismissRequest()
+                    onAiPostEnhance()
+                },
                 leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null) }
         )
 
