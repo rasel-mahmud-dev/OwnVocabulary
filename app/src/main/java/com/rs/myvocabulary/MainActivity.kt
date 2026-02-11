@@ -12,7 +12,10 @@ import androidx.annotation.RequiresApi
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.navigation.NavType
@@ -32,16 +35,13 @@ import com.rs.myvocabulary.viewmodels.AppViewModel
 
 class MainActivity : ComponentActivity() {
 
-    companion object {
-        var sharedText: String? = null
-        var sharedUris: List<Uri>? = null
+    private var sharedText by mutableStateOf<String?>(null)
+    private var sharedUris by mutableStateOf<List<Uri>?>(null)
 
-        fun clearSharedData() {
-            sharedText = null
-            sharedUris = null
-        }
+    private fun clearSharedData() {
+        sharedText = null
+        sharedUris = null
     }
-
 
     private fun handleShareIntent(intent: Intent?) {
         when (intent?.action) {
@@ -62,6 +62,11 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleShareIntent(intent)
+    }
 
     @RequiresApi(Build.VERSION_CODES.R)
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -71,7 +76,6 @@ class MainActivity : ComponentActivity() {
         TTSManager.initialize(this)
         SessionManager.init(this)
         SyncManager.initialize(application)
-
 
         handleShareIntent(intent)
 
@@ -86,6 +90,7 @@ class MainActivity : ComponentActivity() {
             viewModel.startWordSync()
             viewModel.pullDataFromServer()
 
+            // Navigate to create post if share intent was received
             // Navigate to create post if share intent was received
             val hasSharedContent = sharedText != null || sharedUris != null
             LaunchedEffect(hasSharedContent) {
@@ -104,36 +109,35 @@ class MainActivity : ComponentActivity() {
                             BackupScreen(appViewModel = viewModel, navController = navController)
                         }
                         composable(
-                            route = "create_post?postId={postId}",
-                            arguments =
-                                listOf(
-                                    navArgument("postId") {
-                                        type = NavType.StringType
-                                        nullable = true
-                                        defaultValue = null
-                                    }
-                                )
+                                route = "create_post?postId={postId}",
+                                arguments =
+                                        listOf(
+                                                navArgument("postId") {
+                                                    type = NavType.StringType
+                                                    nullable = true
+                                                    defaultValue = null
+                                                }
+                                        )
                         ) { backStackEntry ->
                             val postId = backStackEntry.arguments?.getString("postId")
                             val context = LocalContext.current
-                            val db = remember {
-                                WordDatabase.getInstance(context)
-                            }
-//                            val postToEdit =
-//                                remember(postId) { postId?.let { db.getPostById(it) } }
+                            val db = remember { WordDatabase.getInstance(context) }
+                            //                            val postToEdit =
+                            //                                remember(postId) { postId?.let {
+                            // db.getPostById(it) } }
 
                             CreatePostScreen(
-                                onPostCreated = {
-                                    clearSharedData()
-                                    navController.popBackStack()
-                                },
-                                onDismiss = {
-                                    clearSharedData()
-                                    navController.popBackStack()
-                                },
-                                initialText = sharedText,
-                                initialUris = sharedUris,
-                                postToEdit = null
+                                    onPostCreated = {
+                                        clearSharedData()
+                                        navController.popBackStack()
+                                    },
+                                    onDismiss = {
+                                        clearSharedData()
+                                        navController.popBackStack()
+                                    },
+                                    initialText = sharedText,
+                                    initialUris = sharedUris,
+                                    postToEdit = null
                             )
                         }
                     }

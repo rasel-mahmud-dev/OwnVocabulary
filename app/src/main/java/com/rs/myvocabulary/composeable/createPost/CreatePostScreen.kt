@@ -65,7 +65,7 @@ fun CreatePostScreen(
 
         // Post Type State
         var selectedType by remember { mutableStateOf(postToEdit?.type ?: "word") }
-        val types = listOf("word", "clause", "docs")
+        val types = listOf("word", "docs")
         var wordText by remember { mutableStateOf(postToEdit?.word ?: "") }
         var shortMeaning by remember { mutableStateOf(postToEdit?.shortMeaning ?: "") }
 
@@ -90,6 +90,7 @@ fun CreatePostScreen(
         }
         var showMediaOptions by remember { mutableStateOf(false) }
         var showAudioDialog by remember { mutableStateOf(false) }
+        var expanded by remember { mutableStateOf(false) }
 
         // Handle shared URIs
         LaunchedEffect(initialUris) {
@@ -303,31 +304,71 @@ fun CreatePostScreen(
         ) { padding ->
                 Column(modifier = Modifier.fillMaxSize().padding(padding)) {
 
-                        // Type Selection Tabs
-                        TabRow(selectedTabIndex = types.indexOf(selectedType)) {
-                                types.forEach { type ->
-                                        Tab(
-                                                selected = selectedType == type,
-                                                onClick = { selectedType = type },
-                                                text = {
-                                                        Text(
-                                                                type.replaceFirstChar {
-                                                                        if (it.isLowerCase())
-                                                                                it.titlecase(
-                                                                                        java.util
-                                                                                                .Locale
-                                                                                                .getDefault()
+                        // Type Selection Dropdown
+                        ExposedDropdownMenuBox(
+                                expanded = expanded,
+                                onExpandedChange = { expanded = !expanded },
+                                modifier =
+                                        Modifier.fillMaxWidth()
+                                                .padding(horizontal = 16.dp, vertical = 8.dp)
+                        ) {
+                                OutlinedTextField(
+                                        modifier = Modifier.menuAnchor().fillMaxWidth(),
+                                        readOnly = true,
+                                        value =
+                                                selectedType.replaceFirstChar {
+                                                        if (it.isLowerCase())
+                                                                it.titlecase(
+                                                                        java.util.Locale
+                                                                                .getDefault()
+                                                                )
+                                                        else it.toString()
+                                                },
+                                        onValueChange = {},
+                                        label = { Text("Post Type") },
+                                        trailingIcon = {
+                                                ExposedDropdownMenuDefaults.TrailingIcon(
+                                                        expanded = expanded
+                                                )
+                                        },
+                                        colors =
+                                                ExposedDropdownMenuDefaults
+                                                        .outlinedTextFieldColors()
+                                )
+                                ExposedDropdownMenu(
+                                        expanded = expanded,
+                                        onDismissRequest = { expanded = false }
+                                ) {
+                                        types.forEach { type ->
+                                                DropdownMenuItem(
+                                                        text = {
+                                                                Text(
+                                                                        type.replaceFirstChar {
+                                                                                if (it.isLowerCase()
                                                                                 )
-                                                                        else it.toString()
-                                                                }
-                                                        )
-                                                }
-                                        )
+                                                                                        it.titlecase(
+                                                                                                java.util
+                                                                                                        .Locale
+                                                                                                        .getDefault()
+                                                                                        )
+                                                                                else it.toString()
+                                                                        }
+                                                                )
+                                                        },
+                                                        onClick = {
+                                                                selectedType = type
+                                                                expanded = false
+                                                        },
+                                                        contentPadding =
+                                                                ExposedDropdownMenuDefaults
+                                                                        .ItemContentPadding
+                                                )
+                                        }
                                 }
                         }
 
-                        // Short Meaning Input (for Word and Clause)
-                        if (selectedType == "word" || selectedType == "clause") {
+                        // Short Meaning Input (for Word)
+                        if (selectedType == "word") {
                                 OutlinedTextField(
                                         value = wordText,
                                         onValueChange = { wordText = it },
