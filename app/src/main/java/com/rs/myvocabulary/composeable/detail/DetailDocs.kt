@@ -36,9 +36,11 @@ import com.rs.myvocabulary.composeable.PostDetailComments
 import com.rs.myvocabulary.composeable.VideoPlayerSection
 import com.rs.myvocabulary.composeable.common.GenericFileCard
 import com.rs.myvocabulary.composeable.common.PDFAttachmentCard
+import com.rs.myvocabulary.composeable.createPost.AddPostLabelDialog
 import com.rs.myvocabulary.composeable.detail.components.ArticleContentCard
 import com.rs.myvocabulary.composeable.detail.components.ArticleTitleCard
 import com.rs.myvocabulary.composeable.detail.components.DetailDocsMenu
+import com.rs.myvocabulary.composeable.detail.components.MeaningCard
 import com.rs.myvocabulary.composeable.dialogs.AiExampleDialog
 import com.rs.myvocabulary.composeable.dialogs.AiLabelsDialog
 import com.rs.myvocabulary.composeable.dialogs.AiPostEnhancementDialog
@@ -63,6 +65,7 @@ fun DetailDocs(
 ) {
     var noteDetail by remember { mutableStateOf<Word?>(null) }
     var title by remember { mutableStateOf("") }
+    var shortMeaning by remember { mutableStateOf("") }
     var content by remember { mutableStateOf("") }
     var isReadOnly by remember { mutableStateOf(true) }
     var isSaving by remember { mutableStateOf(false) }
@@ -138,6 +141,7 @@ fun DetailDocs(
             noteDetail = note
             note?.let {
                 title = it.word
+                shortMeaning = it.shortMeaning ?: ""
                 content = it.details
             }
         }
@@ -184,6 +188,7 @@ fun DetailDocs(
             val updatedNote =
                     currentNote.copy(
                             word = title,
+                            shortMeaning = shortMeaning,
                             details = content,
                             updatedAt = System.currentTimeMillis(),
                             attachments = currentAttachments
@@ -364,7 +369,11 @@ fun DetailDocs(
                     )
 
                     if (noteDetail?.type == "word" || noteDetail?.type == "clause") {
-                        Text(text = noteDetail?.shortMeaning ?: "")
+                        MeaningCard(
+                                isReadOnly = isReadOnly,
+                                meaning = shortMeaning,
+                                onMeaningChange = { shortMeaning = it }
+                        )
                     }
 
                     if (content.isNotEmpty()) {
@@ -484,6 +493,23 @@ fun DetailDocs(
                                                         }
                                                 )
                                             }
+
+                                            AddPostLabelDialog(
+                                                    appViewModel = appViewModel,
+                                                    currentLabels = noteDetail?.categories
+                                                                    ?: emptyList(),
+                                                    onSelectedLabels = { selectedLabels ->
+                                                        noteDetail?.let { currentNote ->
+                                                            val updatedNote =
+                                                                    currentNote.copy(
+                                                                            categories =
+                                                                                    selectedLabels
+                                                                    )
+                                                            appViewModel.addWord(updatedNote) {}
+                                                            noteDetail = updatedNote
+                                                        }
+                                                    }
+                                            )
                                         }
                                     }
                                 }
@@ -613,6 +639,9 @@ fun DetailDocs(
                     onDismiss = { showAiEnhancementDialog = false },
                     onProceed = { word, meaning, details, labels ->
                         appViewModel.applyAiPostEnhancement(uid, word, meaning, details, labels)
+                        title = word
+                        shortMeaning = meaning
+                        content = details
                         showAiEnhancementDialog = false
                     }
             )

@@ -78,21 +78,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _wordsUiState = MutableStateFlow(WordsUiState())
     val wordsUiState: StateFlow<WordsUiState> = _wordsUiState.asStateFlow()
 
-    // Clause Word List State
-    private val _clouseWordList = MutableStateFlow<List<Word>>(emptyList())
-    val clouseWordList: StateFlow<List<Word>> = _clouseWordList.asStateFlow()
-
     // Docs List State
     private val _docsList = MutableStateFlow<List<Word>>(emptyList())
     val docsList: StateFlow<List<Word>> = _docsList.asStateFlow()
-
-    // All Words UI State
-    private val _allWordsUiState = MutableStateFlow(WordsUiState())
-    val allWordsUiState: StateFlow<WordsUiState> = _allWordsUiState.asStateFlow()
-
-    // All Words Pagination State
-    private val _allPaginationState = MutableStateFlow(WordsPaginationState())
-    val allPaginationState: StateFlow<WordsPaginationState> = _allPaginationState.asStateFlow()
 
     // Pagination State
     private val _paginationState = MutableStateFlow(WordsPaginationState())
@@ -253,35 +241,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         ) { newNotes -> viewModelScope.launch { handleWordsLoaded(newNotes, more) } }
     }
 
-    fun loadClouseWordList() {
-        db.getClouseWordsList() { items -> viewModelScope.launch { _clouseWordList.value = items } }
-    }
-
-    fun loadAllItems(more: Boolean = false) {
-        if (_allWordsUiState.value.isLoading || _allPaginationState.value.isLoadingMore) return
-
-        if (more && !_allPaginationState.value.hasMoreData) return
-
-        if (more) {
-            _allPaginationState.update { it.copy(isLoadingMore = true) }
-        } else {
-            _allWordsUiState.update { it.copy(isLoading = true, error = null) }
-            _allPaginationState.update { it.copy(currentPage = 0, hasMoreData = true) }
-        }
-
-        val currentPagination = _allPaginationState.value
-        val currentFilter = _filterState.value
-        val offset = currentPagination.currentPage * currentPagination.pageSize
-
-        db.getAllWordsAndClausesPaginated(
-                sortOrder = currentFilter.sortOrder,
-                limit = currentPagination.pageSize,
-                searchQuery = currentFilter.searchQuery,
-                offset = offset,
-                isFav = false,
-        ) { newNotes -> viewModelScope.launch { handleAllItemsLoaded(newNotes, more) } }
-    }
-
     fun loadCategories() {
         viewModelScope.launch(Dispatchers.IO) {
             val categories = db.getAllCategories()
@@ -337,28 +296,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    private fun handleAllItemsLoaded(newNotes: List<Word>, isLoadingMore: Boolean) {
-        val currentNotes = _allWordsUiState.value.items
-        val currentPagination = _allPaginationState.value
-
-        val updatedNotes =
-                if (isLoadingMore) {
-                    currentNotes + newNotes
-                } else {
-                    newNotes
-                }
-
-        _allWordsUiState.update { it.copy(items = updatedNotes, isLoading = false, error = null) }
-
-        _allPaginationState.update {
-            it.copy(
-                    currentPage = currentPagination.currentPage + 1,
-                    hasMoreData = newNotes.size == currentPagination.pageSize,
-                    isLoadingMore = false
-            )
-        }
-    }
-
     // ========== FILTER AND VIEW MODE FUNCTIONS ==========
 
     fun setFilter(sortOrder: Int? = null, searchValue: String? = null) {
@@ -372,7 +309,6 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
             if (sortOrder != null || searchValue != null) {
                 loadNote()
-                loadAllItems()
             }
         } catch (ex: Exception) {
             ex.printStackTrace()
@@ -396,7 +332,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             it.copy(currentPage = 0, hasMoreData = true, isLoadingMore = false)
         }
         loadNote()
-        loadAllItems()
+        loadNote()
     }
 
     fun loadAuth() {
@@ -453,14 +389,9 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
 
                 // Reload the appropriate list based on type
                 when (newWord.type) {
-                    "clause" -> {
-                        loadClouseWordList()
-                        loadAllItems()
-                    }
                     "docs" -> loadDocs()
                     else -> {
                         loadNote()
-                        loadAllItems()
                     }
                 }
 
@@ -494,9 +425,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             db.deleteWord(uid)
             // Reload lists
             loadNote()
-            loadAllItems()
             loadDocs()
-            loadClouseWordList()
             startWordSync()
             withContext(Dispatchers.Main) { onComplete() }
         }
@@ -521,21 +450,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                     )
                 }
 
-                _clouseWordList.update { list ->
-                    list.map { if (it.uid == uid) it.copy(isFavorite = isFavorite) else it }
-                }
-
-                _allWordsUiState.update { state ->
-                    state.copy(
-                            items =
-                                    state.items.map {
-                                        if (it.uid == uid) it.copy(isFavorite = isFavorite) else it
-                                    }
-                    )
-                }
-
                 // Reload lists to ensure correct sorting
-                loadClouseWordList()
                 startWordSync()
             }
         }

@@ -23,7 +23,6 @@ import com.rs.myvocabulary.composeable.dialogs.AddCategoryDialog
 import com.rs.myvocabulary.composeable.docs.CreateDiary
 import com.rs.myvocabulary.composeable.docs.DocsScreen
 import com.rs.myvocabulary.composeable.drawer.AppDrawer
-import com.rs.myvocabulary.composeable.vocabulary.ClauseVocabulary
 import com.rs.myvocabulary.composeable.vocabulary.Vocabulary
 import com.rs.myvocabulary.viewmodels.AppViewModel
 import kotlinx.coroutines.launch
@@ -32,7 +31,7 @@ import kotlinx.coroutines.launch
 @Composable
 fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
     var selectedTab by remember { mutableIntStateOf(0) }
-    val tabs = listOf("All", "Words", "Clauses", "Docs")
+    val tabs = listOf("Words", "Docs")
     var showAddDialog by remember { mutableStateOf(false) }
 
     // Overlay states
@@ -48,7 +47,6 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
 
     val filterState by appViewModel.filterState.collectAsState()
     val viewMode by appViewModel.viewMode.collectAsState()
-    val clouseWordList by appViewModel.clouseWordList.collectAsState()
     val docsList by appViewModel.docsList.collectAsState()
     val allCategories by appViewModel.allCategories.collectAsState()
 
@@ -58,17 +56,14 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
     // Tab titles
     val tabTitle =
             when (selectedTab) {
-                0 -> "All"
-                1 -> "My Words"
-                2 -> "Clause"
-                3 -> "Docs"
+                0 -> "Words"
+                1 -> "Docs"
                 else -> ""
             }
 
     val tabSubtitle =
             when (selectedTab) {
-                2 -> "${clouseWordList.size} words collected"
-                3 -> "${docsList.size} docs collected"
+                1 -> "${docsList.size} docs collected"
                 else -> null
             }
 
@@ -170,8 +165,8 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
                                         )
                                     }
 
-                                    // Sort menu (Words and Clauses tabs only)
-                                    if (selectedTab == 0 || selectedTab == 1) {
+                                    // Sort menu (Words tab only)
+                                    if (selectedTab == 0) {
                                         Box {
                                             IconButton(onClick = { showSortMenu = true }) {
                                                 Icon(
@@ -320,19 +315,9 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
                         0 ->
                                 Vocabulary(
                                         appViewModel = appViewModel,
-                                        onItemClick = { uid -> editingWordUid = uid },
+                                        onItemClick = { uid -> editingWordUid = uid }
                                 )
                         1 ->
-                                Vocabulary(
-                                        appViewModel = appViewModel,
-                                        onItemClick = { uid -> editingWordUid = uid }
-                                )
-                        2 ->
-                                ClauseVocabulary(
-                                        appViewModel = appViewModel,
-                                        onItemClick = { uid -> editingWordUid = uid }
-                                )
-                        3 ->
                                 DocsScreen(
                                         appViewModel = appViewModel,
                                         onNavigateToDetail = { uid -> editingDocUid = uid },
