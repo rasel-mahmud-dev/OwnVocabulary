@@ -308,21 +308,23 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
                     }
                 }
         ) { innerPadding ->
-            Box(modifier = Modifier.padding(innerPadding)) {
-                // Main Content
-                if (editingWordUid == null && editingDocUid == null && !isCreatingDoc) {
-                    when (selectedTab) {
-                        0 ->
-                                Vocabulary(
-                                        appViewModel = appViewModel,
-                                        onItemClick = { uid -> editingWordUid = uid }
-                                )
-                        1 ->
-                                DocsScreen(
-                                        appViewModel = appViewModel,
-                                        onNavigateToDetail = { uid -> editingDocUid = uid },
-                                        onNavigateToCreate = { isCreatingDoc = true }
-                                )
+            Box(modifier = Modifier.fillMaxSize()) {
+                Box(modifier = Modifier.padding(innerPadding)) {
+                    // Main Content
+                    if (editingWordUid == null && editingDocUid == null && !isCreatingDoc) {
+                        when (selectedTab) {
+                            0 ->
+                                    Vocabulary(
+                                            appViewModel = appViewModel,
+                                            onItemClick = { uid -> editingWordUid = uid }
+                                    )
+                            1 ->
+                                    DocsScreen(
+                                            appViewModel = appViewModel,
+                                            onNavigateToDetail = { uid -> editingDocUid = uid },
+                                            onNavigateToCreate = { isCreatingDoc = true }
+                                    )
+                        }
                     }
                 }
 
