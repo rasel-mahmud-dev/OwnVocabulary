@@ -15,6 +15,15 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 
+data class ReadingList(
+        val id: Long = 0,
+        val wordUid: String,
+        val name: String,
+        val expiry: Long? = null,
+        val milestoneDateRange: String? = null,
+        val createdAt: Long = System.currentTimeMillis()
+)
+
 data class CommentAttachment(val url: String, val type: String)
 
 data class Comment(
@@ -70,7 +79,8 @@ data class Word(
         val lastSyncAttempt: Long? = null,
         var categories: List<Label>? = null,
         val attachments: List<CommentAttachment>? = null,
-        val comments: List<Comment>? = null
+        val comments: List<Comment>? = null,
+        val assignedReadingLists: List<String> = emptyList()
 )
 
 data class WordPartial(
@@ -109,11 +119,12 @@ class WordDatabase private constructor(context: Context) :
         companion object {
                 @Volatile private var INSTANCE: WordDatabase? = null
                 private const val DATABASE_NAME = "words.db"
-                private const val DATABASE_VERSION = 6
+                private const val DATABASE_VERSION = 7
 
                 // Table and column names
                 private const val TABLE_WORDS = "words"
-                private const val TABLE_CATEGORIES = "categories" // New table
+                private const val TABLE_CATEGORIES = "categories"
+                private const val TABLE_READING_LIST = "reading_list"
 
                 private const val COLUMN_ID = "id"
                 private const val COLUMN_UID = "uid"
@@ -134,6 +145,12 @@ class WordDatabase private constructor(context: Context) :
                 private const val COLUMN_SYNC_STATUS = "sync_status"
                 private const val COLUMN_RETRY_COUNT = "retry_count"
                 private const val COLUMN_LAST_SYNC_ATTEMPT = "last_sync_attempt"
+
+                // Reading List Columns
+                private const val COLUMN_READING_LIST_NAME = "name"
+                private const val COLUMN_WORD_UID_FK = "word_uid"
+                private const val COLUMN_EXPIRY = "expiry"
+                private const val COLUMN_MILESTONE_DATE_RANGE = "milestone_date_range"
 
                 // Categories Table Columns
                 private const val COLUMN_NAME = "name"
@@ -209,6 +226,20 @@ class WordDatabase private constructor(context: Context) :
                 db.execSQL("CREATE INDEX IF NOT EXISTS idx_uid ON $TABLE_WORDS ($COLUMN_UID)")
                 db.execSQL(
                         "CREATE INDEX IF NOT EXISTS idx_updated_at ON $TABLE_WORDS ($COLUMN_UPDATED_AT)"
+                )
+
+                db.execSQL(
+                        """
+            CREATE TABLE IF NOT EXISTS $TABLE_READING_LIST (
+                $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                $COLUMN_READING_LIST_NAME TEXT NOT NULL,
+                $COLUMN_WORD_UID_FK TEXT NOT NULL,
+                $COLUMN_EXPIRY INTEGER,
+                $COLUMN_MILESTONE_DATE_RANGE TEXT,
+                $COLUMN_CREATED_AT INTEGER NOT NULL,
+                FOREIGN KEY($COLUMN_WORD_UID_FK) REFERENCES $TABLE_WORDS($COLUMN_UID) ON DELETE CASCADE
+            )
+        """.trimIndent()
                 )
         }
 
@@ -415,6 +446,28 @@ class WordDatabase private constructor(context: Context) :
                                 )
                         } catch (e: Exception) {
                                 Log.e("Database", "Migration to version 6 failed", e)
+                                e.printStackTrace()
+                        }
+                }
+
+                if (oldVersion < 7) {
+                        try {
+                                db.execSQL(
+                                        """
+                    CREATE TABLE IF NOT EXISTS $TABLE_READING_LIST (
+                        $COLUMN_ID INTEGER PRIMARY KEY AUTOINCREMENT,
+                        $COLUMN_READING_LIST_NAME TEXT NOT NULL,
+                        $COLUMN_WORD_UID_FK TEXT NOT NULL,
+                        $COLUMN_EXPIRY INTEGER,
+                        $COLUMN_MILESTONE_DATE_RANGE TEXT,
+                        $COLUMN_CREATED_AT INTEGER NOT NULL,
+                        FOREIGN KEY($COLUMN_WORD_UID_FK) REFERENCES $TABLE_WORDS($COLUMN_UID) ON DELETE CASCADE
+                    )
+                """.trimIndent()
+                                )
+                                Log.d("Database", "Migration to version 7 completed successfully")
+                        } catch (e: Exception) {
+                                Log.e("Database", "Migration to version 7 failed", e)
                                 e.printStackTrace()
                         }
                 }
@@ -1157,6 +1210,63 @@ class WordDatabase private constructor(context: Context) :
                 db.update(TABLE_WORDS, values, "$COLUMN_UID = ?", arrayOf(wordUid))
         }
 
+        // READING LIST OPERATIONS
+
+        fun addToReadingList(readingList: ReadingList): Long {
+                val db = writableDatabase
+                val values =
+                        ContentValues().apply {
+                                put(COLUMN_READING_LIST_NAME, readingList.name)
+                                put(COLUMN_WORD_UID_FK, readingList.wordUid)
+                                put(COLUMN_EXPIRY, readingList.expiry)
+                                put(COLUMN_MILESTONE_DATE_RANGE, readingList.milestoneDateRange)
+                                put(COLUMN_CREATED_AT, readingList.createdAt)
+                        }
+                return db.insert(TABLE_READING_LIST, null, values)
+        }
+
+        fun getAllReadingListNames(): List<String> {
+                val names = mutableListOf<String>()
+                val db = readableDatabase
+                val query =
+                        "SELECT DISTINCT $COLUMN_READING_LIST_NAME FROM $TABLE_READING_LIST ORDER BY $COLUMN_READING_LIST_NAME ASC"
+                db.rawQuery(query, null).use { cursor ->
+                        while (cursor.moveToNext()) {
+                                names.add(cursor.getString(0))
+                        }
+                }
+                return names
+        }
+
+        fun getWordsInReadingList(listName: String, callback: (List<Word>) -> Unit) {
+                executor.execute {
+                        val words = mutableListOf<Word>()
+                        val db = readableDatabase
+                        val query =
+                                """
+                                SELECT $TABLE_WORDS.* FROM $TABLE_WORDS
+                                INNER JOIN $TABLE_READING_LIST ON $TABLE_WORDS.$COLUMN_UID = $TABLE_READING_LIST.$COLUMN_WORD_UID_FK
+                                WHERE $TABLE_READING_LIST.$COLUMN_READING_LIST_NAME = ?
+                                ORDER BY $TABLE_READING_LIST.$COLUMN_CREATED_AT DESC
+                        """.trimIndent()
+                        db.rawQuery(query, arrayOf(listName)).use { cursor ->
+                                while (cursor.moveToNext()) {
+                                        words.add(getWordFromCursor(cursor))
+                                }
+                        }
+                        callback(words)
+                }
+        }
+
+        fun removeFromReadingList(wordUid: String, listName: String): Int {
+                val db = writableDatabase
+                return db.delete(
+                        TABLE_READING_LIST,
+                        "$COLUMN_WORD_UID_FK = ? AND $COLUMN_READING_LIST_NAME = ?",
+                        arrayOf(wordUid, listName)
+                )
+        }
+
         private fun getWordFromCursor(cursor: Cursor): Word {
                 return Word(
                         id = CursorUtils.getLongSafe(cursor, COLUMN_ID) ?: 0L,
@@ -1249,6 +1359,30 @@ class WordDatabase private constructor(context: Context) :
                                 } catch (e: Exception) {
                                         null
                                 },
+                        assignedReadingLists =
+                                getReadingListsForWord(
+                                        cursor.getString(cursor.getColumnIndexOrThrow(COLUMN_UID))
+                                )
                 )
+        }
+
+        private fun getReadingListsForWord(wordUid: String): List<String> {
+                val names = mutableListOf<String>()
+                val db = readableDatabase
+                db.query(
+                                TABLE_READING_LIST,
+                                arrayOf(COLUMN_READING_LIST_NAME),
+                                "$COLUMN_WORD_UID_FK = ?",
+                                arrayOf(wordUid),
+                                null,
+                                null,
+                                null
+                        )
+                        .use { cursor ->
+                                while (cursor.moveToNext()) {
+                                        names.add(cursor.getString(0))
+                                }
+                        }
+                return names
         }
 }

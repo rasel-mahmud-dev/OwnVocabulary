@@ -49,6 +49,7 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
     val viewMode by appViewModel.viewMode.collectAsState()
     val docsList by appViewModel.docsList.collectAsState()
     val allCategories by appViewModel.allCategories.collectAsState()
+    val readingLists by appViewModel.readingLists.collectAsState()
 
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
@@ -105,15 +106,23 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
     AppDrawer(
             drawerState = drawerState,
             categories = allCategories,
+            readingLists = readingLists,
             onCategoryClick = { category ->
                 scope.launch { drawerState.close() }
                 // Handle category click (filter?) - for now just close
-                // appViewModel.setCategoryFilter(category) // TODO: Implement if needed
+            },
+            onReadingListClick = { listName ->
+                scope.launch { drawerState.close() }
+                appViewModel.loadReadingListWords(listName)
             },
             onAddCategoryClick = {
                 scope.launch { drawerState.close() }
                 showAddCategoryDialog = true
-            }
+            },
+        onWordClick = {
+            scope.launch { drawerState.close() }
+            navController.navigate("main")
+        }
     ) {
         Scaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -214,52 +223,6 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
                                                         }
                                                 )
                                             }
-                                        }
-
-                                        // Frequently viewed toggle (Words tab only)
-                                        IconButton(
-                                                onClick = {
-                                                    if (viewMode == "frequently_view") {
-                                                        appViewModel.setViewMode("default")
-                                                    } else {
-                                                        appViewModel.setViewMode("frequently_view")
-                                                    }
-                                                }
-                                        ) {
-                                            Icon(
-                                                    imageVector = Icons.Outlined.Timeline,
-                                                    contentDescription = "Frequently viewed",
-                                                    tint =
-                                                            if (viewMode == "frequently_view")
-                                                                    MaterialTheme.colorScheme
-                                                                            .primary
-                                                            else
-                                                                    MaterialTheme.colorScheme
-                                                                            .onSurfaceVariant
-                                            )
-                                        }
-
-                                        // Favorites toggle (Words tab only)
-                                        IconButton(
-                                                onClick = {
-                                                    if (viewMode == "favorite_view") {
-                                                        appViewModel.setViewMode("default")
-                                                    } else {
-                                                        appViewModel.setViewMode("favorite_view")
-                                                    }
-                                                }
-                                        ) {
-                                            Icon(
-                                                    imageVector = Icons.Default.HeartBroken,
-                                                    contentDescription = "Favorites",
-                                                    tint =
-                                                            if (viewMode == "favorite_view")
-                                                                    MaterialTheme.colorScheme
-                                                                            .primary
-                                                            else
-                                                                    MaterialTheme.colorScheme
-                                                                            .onSurfaceVariant
-                                            )
                                         }
                                     }
 

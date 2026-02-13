@@ -11,6 +11,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.AutoStories
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.HorizontalDivider
@@ -31,7 +32,10 @@ import com.rs.myvocabulary.database.Label
 fun AppDrawer(
         drawerState: DrawerState,
         categories: List<Label>,
+        readingLists: List<String> = emptyList(),
         onCategoryClick: (Label) -> Unit,
+        onWordClick: () -> Unit,
+        onReadingListClick: (String) -> Unit = {},
         onAddCategoryClick: () -> Unit = {},
         content: @Composable () -> Unit
 ) {
@@ -44,6 +48,23 @@ fun AppDrawer(
                                             .width(270.dp)
                                             .verticalScroll(rememberScrollState())
                     ) {
+
+                        Spacer(Modifier.height(12.dp))
+                        NavigationDrawerItem(
+                            modifier = Modifier.padding(0.dp).height(40.dp),
+                            label = { Text("Word List", fontSize = 18.sp) },
+                            selected = false,
+                            icon = {
+                                Icon(
+                                    Icons.Default.Label,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary
+                                )
+                            },
+                            onClick = onWordClick
+                        )
+                        Spacer(Modifier.height(12.dp))
+                        HorizontalDivider()
                         Spacer(Modifier.height(12.dp))
                         Row(
                                 modifier = Modifier.padding(8.dp).fillMaxWidth(),
@@ -99,6 +120,31 @@ fun AppDrawer(
                         }
 
                         Spacer(Modifier.height(12.dp))
+
+                        if (readingLists.isNotEmpty()) {
+                            Text(
+                                    "Reading Lists",
+                                    modifier = Modifier.padding(8.dp).fillMaxWidth(),
+                                    style = MaterialTheme.typography.titleLarge
+                            )
+                            HorizontalDivider()
+                            readingLists.forEach { listName ->
+                                NavigationDrawerItem(
+                                        modifier = Modifier.padding(0.dp).height(30.dp),
+                                        label = { Text(listName, fontSize = 14.sp) },
+                                        selected = false,
+                                        icon = {
+                                            Icon(
+                                                    Icons.Default.AutoStories,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.secondary
+                                            )
+                                        },
+                                        onClick = { onReadingListClick(listName) }
+                                )
+                            }
+                            Spacer(Modifier.height(12.dp))
+                        }
                     }
                 }
             },

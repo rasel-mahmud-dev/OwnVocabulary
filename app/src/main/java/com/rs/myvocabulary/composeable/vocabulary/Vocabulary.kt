@@ -19,6 +19,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.rs.myvocabulary.composeable.common.WordItemCard
+import com.rs.myvocabulary.composeable.dialogs.AddToReadingListDialog
 import com.rs.myvocabulary.viewmodels.AppViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -32,19 +33,26 @@ fun Vocabulary(appViewModel: AppViewModel, onItemClick: (String) -> Unit) {
     var isRefreshing by remember { mutableStateOf(false) }
     val coroutineScope = rememberCoroutineScope()
     val listState = rememberLazyListState()
+    var showReadingListDialog by remember { mutableStateOf<String?>(null) } // wordUid
+    val readingLists by appViewModel.readingLists.collectAsState()
 
     // Filter logic
     val filteredWords =
             remember(wordList, searchQuery) {
-                if (searchQuery.isBlank()) {
-                    wordList
-                } else {
-                    wordList.filter { word ->
-                        word.word.contains(searchQuery, ignoreCase = true) ||
-                                word.shortMeaning.contains(searchQuery, ignoreCase = true) ||
-                                word.details.contains(searchQuery, ignoreCase = true)
-                    }
-                }
+                val list =
+                        if (searchQuery.isBlank()) {
+                            wordList
+                        } else {
+                            wordList.filter { word ->
+                                word.word.contains(searchQuery, ignoreCase = true) ||
+                                        word.shortMeaning.contains(
+                                                searchQuery,
+                                                ignoreCase = true
+                                        ) ||
+                                        word.details.contains(searchQuery, ignoreCase = true)
+                            }
+                        }
+                list.sortedByDescending { it.isFavorite }
             }
 
     LaunchedEffect(Unit) {
@@ -84,6 +92,10 @@ fun Vocabulary(appViewModel: AppViewModel, onItemClick: (String) -> Unit) {
                                 word = word,
                                 onClick = { onItemClick(word.uid) },
                                 onPinClick = { appViewModel.toggleFavorite(word.uid) },
+                                onAddToReadingList = { showReadingListDialog = word.uid },
+                                onRemoveFromReadingList = { listName ->
+                                    appViewModel.removeFromReadingList(word.uid, listName)
+                                },
                                 modifier = Modifier.animateItem()
                         )
                     }
@@ -97,6 +109,17 @@ fun Vocabulary(appViewModel: AppViewModel, onItemClick: (String) -> Unit) {
                 }
             }
         }
+    }
+
+    if (showReadingListDialog != null) {
+        AddToReadingListDialog(
+                readingLists = readingLists,
+                onDismiss = { showReadingListDialog = null },
+                onConfirm = { listName ->
+                    appViewModel.addWordToReadingList(showReadingListDialog!!, listName)
+                    showReadingListDialog = null
+                }
+        )
     }
 }
 

@@ -181,6 +181,10 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     private val _isUploading = MutableStateFlow(false)
     val isUploading: StateFlow<Boolean> = _isUploading.asStateFlow()
 
+    // Reading Lists State
+    private val _readingLists = MutableStateFlow<List<String>>(emptyList())
+    val readingLists: StateFlow<List<String>> = _readingLists.asStateFlow()
+
     // Sync Jobs
     private var activeSyncJob: Job? = null
     private var activePullSyncJob: Job? = null
@@ -188,6 +192,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
     init {
         loadAuth()
         loadCategories()
+        loadReadingLists()
     }
 
     // ========== WORD LOADING FUNCTIONS ==========
@@ -212,6 +217,50 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 }
             } catch (e: Exception) {
                 println("Error loading frequent view words: $e")
+            }
+        }
+    }
+
+    fun loadReadingLists() {
+        viewModelScope.launch(Dispatchers.IO) {
+            val lists = db.getAllReadingListNames()
+            _readingLists.value = lists
+        }
+    }
+
+    fun addWordToReadingList(
+            wordUid: String,
+            listName: String,
+            expiry: Long? = null,
+            milestone: String? = null
+    ) {
+        viewModelScope.launch(Dispatchers.IO) {
+            val rl =
+                    com.rs.myvocabulary.database.ReadingList(
+                            wordUid = wordUid,
+                            name = listName,
+                            expiry = expiry,
+                            milestoneDateRange = milestone
+                    )
+            db.addToReadingList(rl)
+            loadReadingLists()
+            startWordSync() // Assuming sync might be needed later
+            loadNote() // Refresh to update assignedReadingLists
+        }
+    }
+
+    fun removeFromReadingList(wordUid: String, listName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.removeFromReadingList(listName, wordUid)
+            loadReadingLists()
+            loadNote() // Refresh to update assignedReadingLists
+        }
+    }
+
+    fun loadReadingListWords(listName: String) {
+        viewModelScope.launch {
+            db.getWordsInReadingList(listName) { words ->
+                _wordsUiState.update { it.copy(items = words, isLoading = false) }
             }
         }
     }
