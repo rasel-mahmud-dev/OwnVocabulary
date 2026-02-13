@@ -27,6 +27,7 @@ class ImageKitUploader(private val context: Context) {
     suspend fun uploadFile(
             uri: Uri? = null,
             file: File? = null,
+            remoteUrl: String? = null,
             fileName: String,
             folder: String = "/learnmedia"
     ): String? =
@@ -58,6 +59,8 @@ class ImageKitUploader(private val context: Context) {
                                 fileName,
                                 file.asRequestBody(mediaType)
                         )
+                    } else if (remoteUrl != null) {
+                        requestBodyBuilder.addFormDataPart("file", remoteUrl)
                     } else if (uri != null) {
                         val mediaType =
                                 context.contentResolver.getType(uri)?.toMediaTypeOrNull()
@@ -105,11 +108,14 @@ class ImageKitUploader(private val context: Context) {
                         val result = gson.fromJson(responseBody, Map::class.java)
                         return@withContext result["url"] as? String
                     } else {
-                        println("ImageKit Upload Failed: ${response.code} ${response.message}")
+                        android.util.Log.e(
+                                "ImageKitUploader",
+                                "Upload Failed: ${response.code} ${response.message}"
+                        )
                         return@withContext null
                     }
                 } catch (e: Exception) {
-                    e.printStackTrace()
+                    android.util.Log.e("ImageKitUploader", "Upload exception", e)
                     return@withContext null
                 }
             }

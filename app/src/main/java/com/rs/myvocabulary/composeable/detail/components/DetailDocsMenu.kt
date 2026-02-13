@@ -29,6 +29,7 @@ fun DetailDocsMenu(
         onSharePost: () -> Unit,
         onShareMedia: () -> Unit,
         onAiLabelGenerate: () -> Unit,
+        onAiStoryMake: () -> Unit,
         onAiPostEnhance: () -> Unit,
         isAiLabelGenerating: Boolean,
         onAiExample: () -> Unit,
@@ -101,12 +102,21 @@ fun DetailDocsMenu(
                 leadingIcon = { Icon(Icons.Filled.AutoFixHigh, contentDescription = null) }
         )
         DropdownMenuItem(
-                text = { Text("Post enhance via AI.") },
+                text = { Text("Make AI Story.") },
+                onClick = {
+                    onDismissRequest()
+                    onAiStoryMake()
+                },
+                leadingIcon = { Icon(Icons.Filled.AutoFixNormal, contentDescription = null) }
+        )
+
+        DropdownMenuItem(
+                text = { Text("Post Enhance (Detailed)") },
                 onClick = {
                     onDismissRequest()
                     onAiPostEnhance()
                 },
-                leadingIcon = { Icon(Icons.Filled.AutoFixNormal, contentDescription = null) }
+                leadingIcon = { Icon(Icons.Filled.AutoFixHigh, contentDescription = null) }
         )
 
         DropdownMenuItem(

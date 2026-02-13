@@ -310,11 +310,18 @@ fun DetailDocs(
                                                 }
                                             }
                                         },
-                                        onAiPostEnhance = {
+                                        onAiStoryMake = {
                                             noteDetail?.let { word ->
                                                 appViewModel.generateAiPostEnhancement(word) {
                                                     showAiEnhancementDialog = true
                                                 }
+                                            }
+                                        },
+                                        onAiPostEnhance = {
+                                            noteDetail?.let { word ->
+                                                appViewModel.generateDetailedAiPostEnhancement(
+                                                        word
+                                                ) { showAiEnhancementDialog = true }
                                             }
                                         },
                                         onAiLabelGenerate = {

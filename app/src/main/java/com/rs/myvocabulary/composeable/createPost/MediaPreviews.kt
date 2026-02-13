@@ -21,12 +21,12 @@ import coil.compose.AsyncImage
 
 @Composable
 fun ImagePreview(model: Any?, onRemove: () -> Unit) {
-        Box(modifier = Modifier.fillMaxWidth().height(200.dp).clip(RoundedCornerShape(12.dp))) {
+        Box(modifier = Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp))) {
                 AsyncImage(
                         model = model,
                         contentDescription = "Selected Image",
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop
+                        modifier = Modifier.fillMaxSize().align(Alignment.TopCenter),
+                        contentScale = ContentScale.Inside
                 )
 
                 // Remove button

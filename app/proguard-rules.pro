@@ -9,7 +9,6 @@
 -keep class com.rs.myvocabulary.sync.PushWordJob { *; }
 -keep class com.rs.myvocabulary.sync.PullWordJob { *; }
 -keep class com.rs.myvocabulary.sync.SyncManager { *; }
--keep class com.rs.myvocabulary.sync.PullNoteJobResponse { *; }
 
 # Keep OkHttp
 -keepattributes Signature

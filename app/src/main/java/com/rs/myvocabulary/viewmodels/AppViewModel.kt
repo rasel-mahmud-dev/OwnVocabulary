@@ -665,6 +665,48 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             }
         }
     }
+
+    private fun parseAiSections(content: String): Map<String, String> {
+        val sections = mutableMapOf<String, StringBuilder>()
+        var currentTag: String? = null
+
+        content.lines().forEach { line ->
+            // Match [[TAG]] or [[ TAG ]]
+            val match = Regex("\\[\\[\\s*(.*?)\\s*\\]\\]").find(line)
+            if (match != null) {
+                currentTag = match.groupValues[1].uppercase().trim()
+                if (!sections.containsKey(currentTag)) {
+                    sections[currentTag!!] = StringBuilder()
+                }
+                val remaining = line.substringAfter(match.groupValues[0]).trim()
+                if (remaining.isNotEmpty()) {
+                    sections[currentTag!!]?.append(remaining)
+                }
+            } else if (currentTag != null) {
+                if (sections[currentTag!!]!!.isNotEmpty()) {
+                    sections[currentTag!!]?.append("\n")
+                }
+                sections[currentTag!!]?.append(line)
+            }
+        }
+
+        return sections.mapValues { (_, value) ->
+            value.toString()
+                    .trim()
+                    .removePrefix(":")
+                    .removePrefix("-")
+                    .removePrefix("—")
+                    .removePrefix("\"")
+                    .removeSuffix("\"")
+                    .trim()
+        }
+    }
+
+    private fun String.isInvalidAiValue(): Boolean {
+        val t = this.trim()
+        return t.isEmpty() || t == "," || t == ":" || t == "."
+    }
+
     fun generateAiPostEnhancement(word: Word, onComplete: () -> Unit) {
         viewModelScope.launch {
             _isAiLabelGenerating.value = true
@@ -672,16 +714,20 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val aiHelper = UnifiedAiHelper()
                 val prompt =
                         """
-                    Enhance the following vocabulary entry and return ONLY a valid JSON object.
+                    Enhance the following vocabulary entry (Story Make style).
                     
-                    Instructions for fields:
-                    1. 'word': Improve the word itself if misspelled or incomplete.
-                    2. 'shortMeaning': Provide a concise and clear meaning.
-                    3. 'details': Write a rich, natural, human-readable description. Use markdown (bold, lists, etc.) if helpful. 
+                    You MUST use exactly these delimiters to separate each field:
+                    [[WORD]] - Updated word
+                    [[SHORT_MEANING]] - Concise meaning
+                    [[DETAILS]] - Rich description/story
                     
-                    CRITICAL: The entire output must be a single valid JSON object. 
-                    The 'details' field must be a valid JSON string (wrap the content in double quotes and escape any internal quotes or newlines as needed). 
-                    DO NOT include any text before or after the JSON.
+                    Instructions:
+                    1. '[[WORD]]': Improve the word itself if misspelled or incomplete.
+                    2. '[[SHORT_MEANING]]': Provide a concise and clear meaning.
+                    3. '[[DETAILS]]': Write a rich, natural, human-readable description or story that helps remember the word. Use markdown (bold, lists, etc.) if helpful. 
+                    
+                    CRITICAL: Use real Bengali (বাংলা) characters directly where applicable. 
+                    DO NOT use JSON. DO NOT escape characters.
                     
                     Current Entry:
                     Word: ${word.word}
@@ -692,19 +738,79 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val response = aiHelper.generateContent(prompt)
                 val result = aiHelper.parseResponse(response)
                 if (result != null) {
-                    val cleanedResult =
-                            if (result.contains("```json")) {
-                                result.substringAfter("```json").substringBefore("```").trim()
-                            } else if (result.contains("```")) {
-                                result.substringAfter("```").substringBefore("```").trim()
-                            } else {
-                                result.trim()
-                            }
+                    val sections = parseAiSections(result)
 
-                    val json = JSONObject(cleanedResult)
-                    _enhancedWord.value = json.optString("word", word.word)
-                    _enhancedShortMeaning.value = json.optString("shortMeaning", word.shortMeaning)
-                    _enhancedDetails.value = json.optString("details", word.details)
+                    val newWord = sections["WORD"]
+                    if (newWord != null && !newWord.isInvalidAiValue())
+                            _enhancedWord.value = newWord
+
+                    val newMeaning = sections["SHORT_MEANING"]
+                    if (newMeaning != null && !newMeaning.isInvalidAiValue())
+                            _enhancedShortMeaning.value = newMeaning
+
+                    val newDetails = sections["DETAILS"]
+                    if (newDetails != null && !newDetails.isInvalidAiValue())
+                            _enhancedDetails.value = newDetails
+
+                    onComplete()
+                }
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                _isAiLabelGenerating.value = false
+            }
+        }
+    }
+
+    fun generateDetailedAiPostEnhancement(word: Word, onComplete: () -> Unit) {
+        viewModelScope.launch {
+            _isAiLabelGenerating.value = true
+            try {
+                val aiHelper = UnifiedAiHelper()
+                val prompt =
+                        """
+                    Generate a detailed vocabulary enhancement for the following word.
+                    
+                    You MUST use exactly these delimiters to separate each field:
+                    [[WORD]] - The word
+                    [[SHORT_MEANING]] - Meaning in English (Bangla in parentheses)
+                    [[DETAILS]] - Full breakdown
+                    
+                    The enhancement should include:
+                    1. '[[WORD]]': The word itself (corrected if needed).
+                    2. '[[SHORT_MEANING]]': A meaning in English followed by a concise Bangla meaning in parentheses.
+                    3. '[[DETAILS]]': A well-formatted markdown string containing:
+                        - **Meaning**: Clear definition.
+                        - **Verb Forms**: (if applicable) Base, Past, Past Participle.
+                        - **Synonyms**: 3-4 synonyms.
+                        - **Antonyms**: 3-4 antonyms.
+                        - **Examples**: 2-3 natural examples where the sentence is a mix of English and Bengali (Banglish style) to provide context.
+                    
+                    CRITICAL: Use real Bengali (বাংলা) characters directly where applicable. 
+                    DO NOT use JSON. DO NOT escape characters.
+                    
+                    Word Data:
+                    Word: ${word.word}
+                    Short Meaning: ${word.shortMeaning}
+                """.trimIndent()
+
+                val response = aiHelper.generateContent(prompt)
+                val result = aiHelper.parseResponse(response)
+                if (result != null) {
+                    val sections = parseAiSections(result)
+
+                    val newWord = sections["WORD"]
+                    if (newWord != null && !newWord.isInvalidAiValue())
+                            _enhancedWord.value = newWord
+
+                    val newMeaning = sections["SHORT_MEANING"]
+                    if (newMeaning != null && !newMeaning.isInvalidAiValue())
+                            _enhancedShortMeaning.value = newMeaning
+
+                    val newDetails = sections["DETAILS"]
+                    if (newDetails != null && !newDetails.isInvalidAiValue())
+                            _enhancedDetails.value = newDetails
+
                     onComplete()
                 }
             } catch (e: Exception) {
@@ -722,48 +828,47 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
                 val aiHelper = UnifiedAiHelper()
                 val prompt =
                         """
-                    > "Please read the following text.
-                    > Your task is to rewrite the main summary/content of the text in a mix of Bengali and English (Benglish style). Follow these rules:
-                    >  * Identify 10-12 key technical or difficult words from the text.
-                    >  * Write a Bengali paragraph summarizing the text, but replace the selected keywords with their English equivalents (Capitalize the first letter of these English words).
-                    >  * The flow should be natural so that a Bengali speaker can understand the meaning of those English words through context.
-                    >  * At the end, provide a 'Vocabulary List' (not in a table) using bullet points. Each point should include: The English Word — Bengali Meaning: A short English definition/context."
-                    >  * Also suggest 3-5 relevant categories for this text.
+                    Rewrite the main summary/content of the following text in a mix of Bengali and English (Benglish style).
+                    
+                    You MUST use exactly these delimiters to separate each field:
+                    [[DETAILS]] - The rewritten text
+                    [[CATEGORIES]] - Suggested categories (comma-separated)
+                    
+                    Instructions for '[[DETAILS]]':
+                    * Identify 10-12 key technical or difficult words from the text.
+                    * Write a Bengali paragraph summarizing the text, but replace the selected keywords with their English equivalents (Capitalize the first letter of these English words).
+                    * The flow should be natural so that a Bengali speaker can understand the meaning of those English words through context.
+                    * At the end, provide a 'Vocabulary List' (not in a table) using bullet points. Each point should include: The English Word — Bengali Meaning: A short English definition/context.
+                    
+                    Instructions for '[[CATEGORIES]]':
+                    * Suggest 3-5 relevant categories for this text as a comma-separated list.
+                    
+                    CRITICAL: Use real Bengali (বাংলা) characters directly. 
+                    DO NOT use JSON. DO NOT escape characters.
                     
                     Text:
                     ${word.details}
-                    
-                    format the output as a valid JSON object with:
-                    - 'details': the rewritten text.
-                    - 'categories': a list of strings for suggested categories.
                 """.trimIndent()
 
                 val response = aiHelper.generateContent(prompt)
                 val result = aiHelper.parseResponse(response)
                 if (result != null) {
-                    val cleanedResult =
-                            if (result.contains("```json")) {
-                                result.substringAfter("```json").substringBefore("```").trim()
-                            } else if (result.contains("```")) {
-                                result.substringAfter("```").substringBefore("```").trim()
-                            } else {
-                                result.trim()
-                            }
+                    val sections = parseAiSections(result)
 
-                    val json = JSONObject(cleanedResult)
-                    _enhancedWord.value = word.word
-                    _enhancedShortMeaning.value = word.shortMeaning
-                    _enhancedDetails.value = json.optString("details", "")
+                    val newDetails = sections["DETAILS"]
+                    if (newDetails != null && !newDetails.isInvalidAiValue())
+                            _enhancedDetails.value = newDetails
 
-                    val catsArray = json.optJSONArray("categories")
-                    val cats = mutableListOf<String>()
-                    if (catsArray != null) {
-                        for (i in 0 until catsArray.length()) {
-                            cats.add(catsArray.getString(i))
-                        }
+                    val categoriesStr = sections["CATEGORIES"] ?: ""
+                    if (categoriesStr.isNotEmpty() && !categoriesStr.isInvalidAiValue()) {
+                        _enhancedLabels.value =
+                                categoriesStr.split(",").map { it.trim() }.filter {
+                                    it.isNotEmpty()
+                                }
                     }
-                    _enhancedLabels.value = cats
 
+                    _enhancedWord.value = word.word
+                    _enhancedShortMeaning.value = word.shortMeaning ?: ""
                     onComplete()
                 }
             } catch (e: Exception) {
@@ -877,17 +982,30 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
             try {
                 val db = WordDatabase.getInstance(context)
 
-                // 1. Save attachments locally
+                // 1. Save attachments locally and re-upload remote images
                 val savedAttachments =
                         mutableListOf<com.rs.myvocabulary.database.CommentAttachment>()
+                val uploader = com.rs.myvocabulary.utils.ImageKitUploader(context)
+
                 for (attachment in attachments) {
                     val path =
                             if (attachment.uri != null) {
                                 com.rs.myvocabulary.utils.LocalAssetManager.saveAsset(
                                         context,
-                                        attachment.uri!!,
+                                        attachment.uri,
                                         attachment.type == "image"
                                 )
+                            } else if (attachment.remoteUrl != null && attachment.type == "image") {
+                                // Re-upload remote image to ImageKit
+                                val uploadedUrl =
+                                        uploader.uploadFile(
+                                                remoteUrl = attachment.remoteUrl,
+                                                fileName =
+                                                        if (!attachment.name.isNullOrBlank())
+                                                                attachment.name
+                                                        else "scraped_image.jpg"
+                                        )
+                                uploadedUrl ?: attachment.remoteUrl // Fallback to original URL
                             } else {
                                 attachment.remoteUrl
                             }

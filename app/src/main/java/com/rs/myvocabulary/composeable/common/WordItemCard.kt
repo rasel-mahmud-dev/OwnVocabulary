@@ -1,11 +1,16 @@
 package com.rs.myvocabulary.composeable.common
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -25,6 +30,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.rs.myvocabulary.database.SyncStatus
 import com.rs.myvocabulary.database.Word
 
 @Composable
@@ -67,14 +73,26 @@ fun WordItemCard(
                         ) {}
                     }
 
-                    Text(
-                            text = word.word  + "  (" + word.syncStatus,
+                    Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ){
+                        Text(
+                            text = word.word,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurface,
                             maxLines = 1,
                             overflow = TextOverflow.Ellipsis
-                    )
+                        )
+
+                        Box(modifier = Modifier.width(8.dp).height(8.dp).background(
+                            if(word.syncStatus == SyncStatus.SYNCED) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error  ,
+                            shape = CircleShape
+                        )){
+
+                        }
+                    }
                 }
 
                 if (word.shortMeaning.isNotEmpty()) {
