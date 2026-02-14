@@ -257,6 +257,13 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun createReadingList(listName: String) {
+        viewModelScope.launch(Dispatchers.IO) {
+            db.insertReadingListMaster(listName)
+            loadReadingLists()
+        }
+    }
+
     fun loadReadingListWords(listName: String) {
         viewModelScope.launch {
             db.getWordsInReadingList(listName) { words ->

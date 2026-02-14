@@ -41,6 +41,7 @@ fun MainScreen(
     var showAddCategoryDialog by remember { mutableStateOf(false) }
     var editingDocUid by remember { mutableStateOf<String?>(null) }
     var isCreatingDoc by remember { mutableStateOf(false) }
+    var showCreateReadingListDialog by remember { mutableStateOf(false) }
 
     // Top bar states
     var showSearchBar by remember { mutableStateOf(false) }
@@ -123,6 +124,17 @@ fun MainScreen(
         )
     }
 
+    if (showCreateReadingListDialog) {
+        com.rs.myvocabulary.composeable.dialogs.CreateReadingListDialog(
+                onDismiss = { showCreateReadingListDialog = false },
+                onConfirm = { name ->
+                    showCreateReadingListDialog = false
+                    appViewModel.createReadingList(name)
+                    navController.navigate("reading_list/$name")
+                }
+        )
+    }
+
     AppDrawer(
             drawerState = drawerState,
             categories = allCategories,
@@ -138,6 +150,10 @@ fun MainScreen(
             onAddCategoryClick = {
                 scope.launch { drawerState.close() }
                 showAddCategoryDialog = true
+            },
+            onAddReadingListClick = {
+                scope.launch { drawerState.close() }
+                showCreateReadingListDialog = true
             },
             onWordClick = {
                 scope.launch { drawerState.close() }

@@ -119,12 +119,13 @@ class WordDatabase private constructor(context: Context) :
         companion object {
                 @Volatile private var INSTANCE: WordDatabase? = null
                 private const val DATABASE_NAME = "words.db"
-                private const val DATABASE_VERSION = 7
+                private const val DATABASE_VERSION = 9
 
                 // Table and column names
                 private const val TABLE_WORDS = "words"
                 private const val TABLE_CATEGORIES = "categories"
                 private const val TABLE_READING_LIST = "reading_list"
+                private const val TABLE_READING_LIST_METADATA = "reading_list_metadata"
 
                 private const val COLUMN_ID = "id"
                 private const val COLUMN_UID = "uid"
@@ -237,7 +238,17 @@ class WordDatabase private constructor(context: Context) :
                 $COLUMN_EXPIRY INTEGER,
                 $COLUMN_MILESTONE_DATE_RANGE TEXT,
                 $COLUMN_CREATED_AT INTEGER NOT NULL,
-                FOREIGN KEY($COLUMN_WORD_UID_FK) REFERENCES $TABLE_WORDS($COLUMN_UID) ON DELETE CASCADE
+                FOREIGN KEY($COLUMN_WORD_UID_FK) REFERENCES $TABLE_WORDS($COLUMN_UID) ON DELETE CASCADE,
+                UNIQUE($COLUMN_READING_LIST_NAME, $COLUMN_WORD_UID_FK)
+            )
+        """.trimIndent()
+                )
+
+                db.execSQL(
+                        """
+            CREATE TABLE IF NOT EXISTS $TABLE_READING_LIST_METADATA (
+                $COLUMN_READING_LIST_NAME TEXT PRIMARY KEY,
+                $COLUMN_CREATED_AT INTEGER NOT NULL
             )
         """.trimIndent()
                 )
@@ -468,6 +479,58 @@ class WordDatabase private constructor(context: Context) :
                                 Log.d("Database", "Migration to version 7 completed successfully")
                         } catch (e: Exception) {
                                 Log.e("Database", "Migration to version 7 failed", e)
+                                e.printStackTrace()
+                        }
+                }
+
+                if (oldVersion < 8) {
+                        try {
+                                // Delete duplicate reading list entries, keeping only the first one
+                                db.execSQL(
+                                        """
+                    DELETE FROM $TABLE_READING_LIST
+                    WHERE $COLUMN_ID NOT IN (
+                        SELECT MIN($COLUMN_ID)
+                        FROM $TABLE_READING_LIST
+                        GROUP BY $COLUMN_READING_LIST_NAME, $COLUMN_WORD_UID_FK
+                    )
+                """.trimIndent()
+                                )
+
+                                // Create unique index to enforce uniqueness for existing table
+                                db.execSQL(
+                                        "CREATE UNIQUE INDEX IF NOT EXISTS idx_reading_list_unique ON $TABLE_READING_LIST ($COLUMN_READING_LIST_NAME, $COLUMN_WORD_UID_FK)"
+                                )
+                                Log.d("Database", "Migration to version 8 completed successfully")
+                        } catch (e: Exception) {
+                                Log.e("Database", "Migration to version 8 failed", e)
+                                e.printStackTrace()
+                        }
+                }
+
+                if (oldVersion < 9) {
+                        try {
+                                db.execSQL(
+                                        """
+                    CREATE TABLE IF NOT EXISTS $TABLE_READING_LIST_METADATA (
+                        $COLUMN_READING_LIST_NAME TEXT PRIMARY KEY,
+                        $COLUMN_CREATED_AT INTEGER NOT NULL
+                    )
+                """.trimIndent()
+                                )
+
+                                // Populate metadata with existing names from associative table
+                                db.execSQL(
+                                        """
+                    INSERT OR IGNORE INTO $TABLE_READING_LIST_METADATA ($COLUMN_READING_LIST_NAME, $COLUMN_CREATED_AT)
+                    SELECT DISTINCT $COLUMN_READING_LIST_NAME, MIN($COLUMN_CREATED_AT)
+                    FROM $TABLE_READING_LIST
+                    GROUP BY $COLUMN_READING_LIST_NAME
+                """.trimIndent()
+                                )
+                                Log.d("Database", "Migration to version 9 completed successfully")
+                        } catch (e: Exception) {
+                                Log.e("Database", "Migration to version 9 failed", e)
                                 e.printStackTrace()
                         }
                 }
@@ -1214,6 +1277,10 @@ class WordDatabase private constructor(context: Context) :
 
         fun addToReadingList(readingList: ReadingList): Long {
                 val db = writableDatabase
+
+                // Ensure master list entry exists
+                insertReadingListMaster(readingList.name)
+
                 val values =
                         ContentValues().apply {
                                 put(COLUMN_READING_LIST_NAME, readingList.name)
@@ -1222,14 +1289,34 @@ class WordDatabase private constructor(context: Context) :
                                 put(COLUMN_MILESTONE_DATE_RANGE, readingList.milestoneDateRange)
                                 put(COLUMN_CREATED_AT, readingList.createdAt)
                         }
-                return db.insert(TABLE_READING_LIST, null, values)
+                return db.insertWithOnConflict(
+                        TABLE_READING_LIST,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_IGNORE
+                )
+        }
+
+        fun insertReadingListMaster(name: String) {
+                val db = writableDatabase
+                val values =
+                        ContentValues().apply {
+                                put(COLUMN_READING_LIST_NAME, name)
+                                put(COLUMN_CREATED_AT, System.currentTimeMillis())
+                        }
+                db.insertWithOnConflict(
+                        TABLE_READING_LIST_METADATA,
+                        null,
+                        values,
+                        SQLiteDatabase.CONFLICT_IGNORE
+                )
         }
 
         fun getAllReadingListNames(): List<String> {
                 val names = mutableListOf<String>()
                 val db = readableDatabase
                 val query =
-                        "SELECT DISTINCT $COLUMN_READING_LIST_NAME FROM $TABLE_READING_LIST ORDER BY $COLUMN_READING_LIST_NAME ASC"
+                        "SELECT $COLUMN_READING_LIST_NAME FROM $TABLE_READING_LIST_METADATA ORDER BY $COLUMN_READING_LIST_NAME ASC"
                 db.rawQuery(query, null).use { cursor ->
                         while (cursor.moveToNext()) {
                                 names.add(cursor.getString(0))
