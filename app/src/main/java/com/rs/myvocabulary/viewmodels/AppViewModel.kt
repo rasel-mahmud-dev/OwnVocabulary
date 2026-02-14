@@ -370,6 +370,7 @@ class AppViewModel(application: Application) : AndroidViewModel(application) {
         when (value) {
             "favorite_view" -> loadFavoriteWords()
             "frequently_view" -> loadFrequentViewWords()
+            "default" -> loadNote()
         }
 
         PreferencesManager.putString("viewMode", value)

@@ -12,6 +12,8 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoStories
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Label
 import androidx.compose.material3.DrawerState
 import androidx.compose.material3.HorizontalDivider
@@ -35,6 +37,8 @@ fun AppDrawer(
         readingLists: List<String> = emptyList(),
         onCategoryClick: (Label) -> Unit,
         onWordClick: () -> Unit,
+        onFavoritesClick: () -> Unit = {},
+        onFrequentClick: () -> Unit = {},
         onReadingListClick: (String) -> Unit = {},
         onAddCategoryClick: () -> Unit = {},
         content: @Composable () -> Unit
@@ -48,20 +52,45 @@ fun AppDrawer(
                                             .width(270.dp)
                                             .verticalScroll(rememberScrollState())
                     ) {
-
                         Spacer(Modifier.height(12.dp))
                         NavigationDrawerItem(
-                            modifier = Modifier.padding(0.dp).height(40.dp),
-                            label = { Text("Word List", fontSize = 18.sp) },
-                            selected = false,
-                            icon = {
-                                Icon(
-                                    Icons.Default.Label,
-                                    contentDescription = null,
-                                    tint = MaterialTheme.colorScheme.primary
-                                )
-                            },
-                            onClick = onWordClick
+                                modifier = Modifier.padding(0.dp).height(40.dp),
+                                label = { Text("Word List", fontSize = 18.sp) },
+                                selected = false,
+                                icon = {
+                                    Icon(
+                                            Icons.Default.Label,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = onWordClick
+                        )
+                        NavigationDrawerItem(
+                                modifier = Modifier.padding(0.dp).height(40.dp),
+                                label = { Text("Favorites", fontSize = 18.sp) },
+                                selected = false,
+                                icon = {
+                                    Icon(
+                                            Icons.Default.Favorite,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = onFavoritesClick
+                        )
+                        NavigationDrawerItem(
+                                modifier = Modifier.padding(0.dp).height(40.dp),
+                                label = { Text("Frequently Viewed", fontSize = 18.sp) },
+                                selected = false,
+                                icon = {
+                                    Icon(
+                                            Icons.Default.History,
+                                            contentDescription = null,
+                                            tint = MaterialTheme.colorScheme.primary
+                                    )
+                                },
+                                onClick = onFrequentClick
                         )
                         Spacer(Modifier.height(12.dp))
                         HorizontalDivider()

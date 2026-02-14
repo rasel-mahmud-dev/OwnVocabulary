@@ -8,7 +8,6 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.*
-import androidx.compose.material.icons.outlined.Timeline
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
@@ -29,8 +28,11 @@ import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
-    var selectedTab by remember { mutableIntStateOf(0) }
+fun MainScreen(
+        appViewModel: AppViewModel,
+        navController: NavHostController,
+        currentRoute: String = "main"
+) {
     val tabs = listOf("Words", "Docs")
     var showAddDialog by remember { mutableStateOf(false) }
 
@@ -54,17 +56,35 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
     val drawerState = rememberDrawerState(initialValue = DrawerValue.Closed)
     val scope = rememberCoroutineScope()
 
-    // Tab titles
+    // Dynamic page state based on route
+    val isDocsRoute = currentRoute == "docs"
+    val selectedTab = if (isDocsRoute) 1 else 0
+
     val tabTitle =
-            when (selectedTab) {
-                0 -> "Words"
-                1 -> "Docs"
-                else -> ""
+            when {
+                currentRoute == "favorites" -> "Favorites"
+                currentRoute == "frequent" -> "Frequently Viewed"
+                currentRoute.startsWith("reading_list/") ->
+                        currentRoute.substringAfter("reading_list/")
+                isDocsRoute -> "Docs"
+                else -> "Words"
             }
 
+    LaunchedEffect(currentRoute) {
+        when {
+            currentRoute == "favorites" -> appViewModel.setViewMode("favorite_view")
+            currentRoute == "frequent" -> appViewModel.setViewMode("frequently_view")
+            currentRoute.startsWith("reading_list/") -> {
+                val listName = currentRoute.substringAfter("reading_list/")
+                appViewModel.loadReadingListWords(listName)
+            }
+            else -> appViewModel.setViewMode("default")
+        }
+    }
+
     val tabSubtitle =
-            when (selectedTab) {
-                1 -> "${docsList.size} docs collected"
+            when {
+                isDocsRoute -> "${docsList.size} docs collected"
                 else -> null
             }
 
@@ -113,16 +133,24 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
             },
             onReadingListClick = { listName ->
                 scope.launch { drawerState.close() }
-                appViewModel.loadReadingListWords(listName)
+                navController.navigate("reading_list/$listName")
             },
             onAddCategoryClick = {
                 scope.launch { drawerState.close() }
                 showAddCategoryDialog = true
             },
-        onWordClick = {
-            scope.launch { drawerState.close() }
-            navController.navigate("main")
-        }
+            onWordClick = {
+                scope.launch { drawerState.close() }
+                navController.navigate("main")
+            },
+            onFavoritesClick = {
+                scope.launch { drawerState.close() }
+                navController.navigate("favorites")
+            },
+            onFrequentClick = {
+                scope.launch { drawerState.close() }
+                navController.navigate("frequent")
+            }
     ) {
         Scaffold(
                 modifier = Modifier.fillMaxSize(),
@@ -258,12 +286,26 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
                     if (editingWordUid == null && editingDocUid == null && !isCreatingDoc) {
                         NavigationBar {
                             tabs.forEachIndexed { index, title ->
+                                val targetRoute = if (index == 0) "main" else "docs"
                                 NavigationBarItem(
                                         selected = selectedTab == index,
-                                        onClick = { selectedTab = index },
+                                        onClick = {
+                                            if (selectedTab != index) {
+                                                navController.navigate(targetRoute) {
+                                                    popUpTo("main") { saveState = true }
+                                                    launchSingleTop = true
+                                                    restoreState = true
+                                                }
+                                            }
+                                        },
                                         label = { Text(title) },
                                         icon = {
-                                            // You can add icons here if needed
+                                            Icon(
+                                                    imageVector =
+                                                            if (index == 0) Icons.Default.MenuBook
+                                                            else Icons.Default.Description,
+                                                    contentDescription = title
+                                            )
                                         }
                                 )
                             }
@@ -275,18 +317,17 @@ fun MainScreen(appViewModel: AppViewModel, navController: NavHostController) {
                 Box(modifier = Modifier.padding(innerPadding)) {
                     // Main Content
                     if (editingWordUid == null && editingDocUid == null && !isCreatingDoc) {
-                        when (selectedTab) {
-                            0 ->
-                                    Vocabulary(
-                                            appViewModel = appViewModel,
-                                            onItemClick = { uid -> editingWordUid = uid }
-                                    )
-                            1 ->
-                                    DocsScreen(
-                                            appViewModel = appViewModel,
-                                            onNavigateToDetail = { uid -> editingDocUid = uid },
-                                            onNavigateToCreate = { isCreatingDoc = true }
-                                    )
+                        if (isDocsRoute) {
+                            DocsScreen(
+                                    appViewModel = appViewModel,
+                                    onNavigateToDetail = { uid -> editingDocUid = uid },
+                                    onNavigateToCreate = { isCreatingDoc = true }
+                            )
+                        } else {
+                            Vocabulary(
+                                    appViewModel = appViewModel,
+                                    onItemClick = { uid -> editingWordUid = uid }
+                            )
                         }
                     }
                 }

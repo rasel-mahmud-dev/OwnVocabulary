@@ -103,7 +103,44 @@ class MainActivity : ComponentActivity() {
                 Surface(modifier = Modifier.fillMaxSize()) {
                     NavHost(navController = navController, startDestination = "main") {
                         composable("main") {
-                            MainScreen(appViewModel = viewModel, navController = navController)
+                            MainScreen(
+                                    appViewModel = viewModel,
+                                    navController = navController,
+                                    currentRoute = "main"
+                            )
+                        }
+                        composable("docs") {
+                            MainScreen(
+                                    appViewModel = viewModel,
+                                    navController = navController,
+                                    currentRoute = "docs"
+                            )
+                        }
+                        composable("favorites") {
+                            MainScreen(
+                                    appViewModel = viewModel,
+                                    navController = navController,
+                                    currentRoute = "favorites"
+                            )
+                        }
+                        composable("frequent") {
+                            MainScreen(
+                                    appViewModel = viewModel,
+                                    navController = navController,
+                                    currentRoute = "frequent"
+                            )
+                        }
+                        composable(
+                                route = "reading_list/{name}",
+                                arguments =
+                                        listOf(navArgument("name") { type = NavType.StringType })
+                        ) { backStackEntry ->
+                            val listName = backStackEntry.arguments?.getString("name") ?: ""
+                            MainScreen(
+                                    appViewModel = viewModel,
+                                    navController = navController,
+                                    currentRoute = "reading_list/$listName"
+                            )
                         }
                         composable("backup") {
                             BackupScreen(appViewModel = viewModel, navController = navController)
